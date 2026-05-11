@@ -1,0 +1,905 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard Comercial — Escape Sessenta</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+
+<style>
+  :root {
+    --bg-base:       #0d0d0f;
+    --bg-card:       #141417;
+    --bg-card2:      #1a1a1f;
+    --bg-hover:      #1f1f26;
+    --border:        rgba(255,255,255,0.06);
+    --border-bright: rgba(255,255,255,0.12);
+    --white:         #f0f0f0;
+    --muted:         #6b6b75;
+    --subtle:        #3a3a44;
+    --green:         #3dba7a;
+    --green-bg:      rgba(61,186,122,0.08);
+    --green-border:  rgba(61,186,122,0.3);
+    --red:           #d45555;
+    --red-bg:        rgba(212,85,85,0.08);
+    --red-border:    rgba(212,85,85,0.3);
+    --yellow:        #c9a23a;
+    --yellow-bg:     rgba(201,162,58,0.08);
+    --yellow-border: rgba(201,162,58,0.3);
+    --accent:        #5b8cff;
+    --font-display:  'Bebas Neue', sans-serif;
+    --font-body:     'DM Sans', sans-serif;
+    --radius:        10px;
+    --radius-lg:     16px;
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  body {
+    background: var(--bg-base);
+    color: var(--white);
+    font-family: var(--font-body);
+    font-size: 14px;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  .layout {
+    display: grid;
+    grid-template-rows: 56px 1fr;
+    min-height: 100vh;
+  }
+
+  /* ── HEADER ── */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 32px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-card);
+    position: relative;
+  }
+  header::after {
+    content: '';
+    position: absolute;
+    bottom: -1px; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    opacity: 0.4;
+  }
+  .header-left { display:flex; align-items:center; gap:14px; }
+  .logo-mark {
+    width:28px; height:28px; border-radius:6px;
+    background:var(--accent);
+    display:flex; align-items:center; justify-content:center;
+    font-family:var(--font-display); font-size:15px;
+  }
+  .header-title { font-family:var(--font-display); font-size:20px; letter-spacing:2px; }
+  .header-right { display:flex; align-items:center; gap:20px; }
+  .last-update  { font-size:11px; color:var(--muted); letter-spacing:0.5px; }
+  .status-dot {
+    width:7px; height:7px; border-radius:50%;
+    background:var(--green); box-shadow:0 0 8px var(--green);
+    animation: pulse-dot 2s ease-in-out infinite;
+  }
+  @keyframes pulse-dot { 0%,100%{opacity:1} 50%{opacity:0.4} }
+  .month-badge {
+    font-size:11px; color:var(--accent); letter-spacing:1px;
+    text-transform:uppercase; padding:3px 10px;
+    border:1px solid rgba(91,140,255,0.25); border-radius:20px;
+  }
+  .error-badge {
+    font-size:11px; color:var(--red); letter-spacing:0.5px;
+    background:var(--red-bg); padding:3px 10px; border-radius:20px;
+    border:1px solid var(--red-border); display:none;
+  }
+
+  /* ── MAIN ── */
+  main { padding:24px 32px 32px; display:flex; flex-direction:column; gap:20px; overflow-y:auto; }
+
+  /* ── CARDS ── */
+  .cards-row { display:grid; grid-template-columns:repeat(5,1fr); gap:14px; }
+  .card {
+    background:var(--bg-card); border:1px solid var(--border);
+    border-radius:var(--radius-lg); padding:20px 22px;
+    position:relative; overflow:hidden; transition:border-color 0.2s;
+  }
+  .card:hover { border-color:var(--border-bright); }
+  .card::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; }
+  .card.accent-blue::before   { background:var(--accent); }
+  .card.accent-green::before  { background:var(--green); }
+  .card.accent-white::before  { background:rgba(255,255,255,0.3); }
+  .card.accent-red::before    { background:var(--red); }
+  .card.accent-yellow::before { background:var(--yellow); }
+  .card-label { font-size:10px; color:var(--muted); letter-spacing:1.5px; text-transform:uppercase; margin-bottom:10px; }
+  .card-value { font-family:var(--font-display); font-size:38px; letter-spacing:1px; line-height:1; margin-bottom:8px; }
+  .card-value.green { color:var(--green); }
+  .card-value.red   { color:var(--red); }
+  .card-value.blue  { color:var(--accent); }
+  .card-sub { font-size:11px; color:var(--muted); }
+  .mini-bar { margin-top:12px; height:3px; background:var(--subtle); border-radius:2px; overflow:hidden; }
+  .mini-bar-fill { height:100%; border-radius:2px; background:var(--accent); transition:width 1s ease; }
+  .mini-bar-fill.green  { background:var(--green); }
+  .mini-bar-fill.red    { background:var(--red); }
+  .mini-bar-fill.yellow { background:var(--yellow); }
+
+  /* ── GRÁFICOS ── */
+  .charts-row { display:grid; grid-template-columns:300px 1fr; gap:14px; }
+  .panel {
+    background:var(--bg-card); border:1px solid var(--border);
+    border-radius:var(--radius-lg); padding:22px 24px;
+  }
+  .panel-title {
+    font-size:10px; color:var(--muted); letter-spacing:1.5px;
+    text-transform:uppercase; margin-bottom:18px;
+    display:flex; align-items:center; gap:8px;
+  }
+  .panel-title::before {
+    content:''; width:3px; height:12px;
+    background:var(--accent); border-radius:2px; flex-shrink:0;
+  }
+
+  /* Donut */
+  .donut-wrap { position:relative; width:190px; height:190px; margin:0 auto 20px; }
+  .donut-center {
+    position:absolute; inset:0;
+    display:flex; flex-direction:column;
+    align-items:center; justify-content:center; pointer-events:none;
+  }
+  .donut-pct { font-family:var(--font-display); font-size:44px; letter-spacing:1px; line-height:1; }
+  .donut-label { font-size:10px; color:var(--muted); letter-spacing:1px; text-transform:uppercase; margin-top:4px; }
+  .donut-legend { display:flex; flex-direction:column; gap:8px; margin-top:4px; }
+  .legend-item { display:flex; align-items:center; justify-content:space-between; font-size:12px; }
+  .legend-dot  { width:8px; height:8px; border-radius:2px; margin-right:8px; flex-shrink:0; }
+  .legend-left { display:flex; align-items:center; color:var(--muted); }
+  .legend-val  { font-weight:500; }
+
+  /* Acumulado */
+  .acum-stats { display:flex; gap:28px; margin-bottom:16px; flex-wrap:wrap; }
+  .acum-stat-val { font-family:var(--font-display); font-size:26px; letter-spacing:1px; }
+  .acum-stat-label { font-size:10px; color:var(--muted); letter-spacing:1px; text-transform:uppercase; margin-top:2px; }
+  .acum-chart-wrap { height:240px; position:relative; }
+
+  /* ── TABELA + RANKING ── */
+  .bottom-row { display:grid; grid-template-columns:1fr 340px; gap:14px; }
+  .table-wrap { overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; }
+  thead th {
+    font-size:10px; color:var(--muted); letter-spacing:1.5px;
+    text-transform:uppercase; padding:0 12px 10px; text-align:left;
+    border-bottom:1px solid var(--border);
+  }
+  tbody tr { border-bottom:1px solid var(--border); transition:background 0.15s; }
+  tbody tr:hover { background:var(--bg-hover); }
+  tbody td { padding:10px 12px; font-size:13px; }
+  .row-fechada, .row-concluida { border-left:3px solid var(--green) !important; background:var(--green-bg); }
+  .row-recusada  { border-left:3px solid var(--red) !important;    background:var(--red-bg); }
+  .row-negociacao{ border-left:3px solid var(--yellow) !important; background:var(--yellow-bg); }
+  .status-pill {
+    display:inline-block; font-size:10px; letter-spacing:1px;
+    text-transform:uppercase; padding:3px 8px; border-radius:4px; font-weight:500;
+  }
+  .pill-green  { color:var(--green);  background:var(--green-bg);  border:1px solid var(--green-border); }
+  .pill-red    { color:var(--red);    background:var(--red-bg);    border:1px solid var(--red-border); }
+  .pill-yellow { color:var(--yellow); background:var(--yellow-bg); border:1px solid var(--yellow-border); }
+  .pill-muted  { color:var(--muted);  background:var(--bg-card2);  border:1px solid var(--border); }
+
+  /* Ranking */
+  .ranking-list { display:flex; flex-direction:column; gap:8px; }
+  .rank-item {
+    display:grid; grid-template-columns:28px 1fr auto;
+    align-items:center; gap:12px;
+    padding:10px 12px; border-radius:var(--radius);
+    border:1px solid var(--border); background:var(--bg-card2);
+    transition:border-color 0.2s;
+  }
+  .rank-item:hover { border-color:var(--border-bright); }
+  .rank-item.first { border-color:var(--green-border); background:var(--green-bg); }
+  .rank-pos { font-family:var(--font-display); font-size:18px; color:var(--muted); text-align:center; }
+  .rank-item.first .rank-pos { color:var(--green); }
+  .rank-name { font-weight:500; font-size:13px; }
+  .rank-pct-sub { font-size:11px; color:var(--muted); margin-top:2px; }
+  .rank-val { font-family:var(--font-display); font-size:20px; text-align:right; }
+  .rank-item.first .rank-val { color:var(--green); }
+
+  /* ── ALERTA ── */
+  #alert-overlay {
+    display:none; position:fixed; inset:0;
+    background:rgba(0,0,0,0.9); z-index:9999;
+    align-items:center; justify-content:center;
+    flex-direction:column; gap:24px;
+    backdrop-filter:blur(8px);
+  }
+  #alert-overlay.visible { display:flex; animation:fadeIn 0.3s ease; }
+  @keyframes fadeIn { from{opacity:0} to{opacity:1} }
+  .alert-icon  { font-size:110px; animation:bounce 0.6s cubic-bezier(.36,.07,.19,.97) both; }
+  @keyframes bounce {
+    0%{transform:scale(0.3);opacity:0} 60%{transform:scale(1.1)}
+    80%{transform:scale(0.95)} 100%{transform:scale(1);opacity:1}
+  }
+  .alert-title { font-family:var(--font-display); font-size:60px; letter-spacing:4px; color:var(--green); }
+  .alert-sub   { font-size:16px; color:var(--muted); letter-spacing:2px; text-transform:uppercase; }
+  .alert-name  { font-size:24px; font-weight:600; }
+  .alert-pct   { font-family:var(--font-display); font-size:48px; letter-spacing:2px; color:var(--green); }
+  .alert-bar   { width:260px; height:3px; background:var(--subtle); border-radius:2px; overflow:hidden; }
+  .alert-bar-fill { height:100%; background:var(--green); transition:width 0.1s linear; }
+
+  /* ── LOADING ── */
+  #loading-screen {
+    position:fixed; inset:0; background:var(--bg-base);
+    display:flex; flex-direction:column;
+    align-items:center; justify-content:center; gap:16px; z-index:8888;
+  }
+  .loading-spinner {
+    width:40px; height:40px; border:2px solid var(--subtle);
+    border-top-color:var(--accent); border-radius:50%;
+    animation:spin 0.8s linear infinite;
+  }
+  @keyframes spin { to{transform:rotate(360deg)} }
+  .loading-text { font-size:13px; color:var(--muted); letter-spacing:1px; }
+</style>
+</head>
+<body>
+
+<!-- TELA DE LOADING -->
+<div id="loading-screen">
+  <div class="loading-spinner"></div>
+  <div class="loading-text">Conectando ao SharePoint…</div>
+</div>
+
+<!-- ALERTA VENDA FECHADA -->
+<div id="alert-overlay">
+  <div class="alert-icon">🏆</div>
+  <div class="alert-title">VENDA FECHADA!</div>
+  <div class="alert-sub">Nova venda registrada</div>
+  <div class="alert-name" id="alert-vendedor">—</div>
+  <div class="alert-pct"  id="alert-pct">0%</div>
+  <div class="alert-sub"  id="alert-label">da meta mensal</div>
+  <div class="alert-bar"><div class="alert-bar-fill" id="alert-bar-fill" style="width:100%"></div></div>
+</div>
+
+<!-- LAYOUT -->
+<div class="layout">
+  <header>
+    <div class="header-left">
+      <div class="logo-mark">ES</div>
+      <div>
+        <div class="header-title">Dashboard Comercial</div>
+      </div>
+    </div>
+    <div class="header-right">
+      <span class="error-badge" id="error-badge">⚠ Erro na conexão</span>
+      <span class="month-badge" id="month-badge">—</span>
+      <span class="last-update"  id="last-update">Aguardando…</span>
+      <div class="status-dot" title="Sincronizando"></div>
+    </div>
+  </header>
+
+  <main>
+
+    <!-- CARDS -->
+    <div class="cards-row">
+      <div class="card accent-green">
+        <div class="card-label">% Atingido — Mínima</div>
+        <div class="card-value green" id="c-pct-min">—%</div>
+        <div class="card-sub">da meta mínima do mês</div>
+        <div class="mini-bar"><div class="mini-bar-fill green" id="bar-pct-min" style="width:0%"></div></div>
+      </div>
+
+      <div class="card accent-blue">
+        <div class="card-label">% Atingido — Desejável</div>
+        <div class="card-value blue" id="c-pct-des">—%</div>
+        <div class="card-sub">da meta desejável do mês</div>
+        <div class="mini-bar"><div class="mini-bar-fill" id="bar-pct-des" style="width:0%"></div></div>
+      </div>
+
+      <div class="card accent-red">
+        <div class="card-label">% Falta (Mínima)</div>
+        <div class="card-value red" id="c-falta-min">—%</div>
+        <div class="card-sub">para bater a meta mínima</div>
+        <div class="mini-bar"><div class="mini-bar-fill red" id="bar-falta-min" style="width:0%"></div></div>
+      </div>
+
+      <div class="card accent-red">
+        <div class="card-label">% Falta (Desejável)</div>
+        <div class="card-value red" id="c-falta-des">—%</div>
+        <div class="card-sub">para bater a meta desejável</div>
+        <div class="mini-bar"><div class="mini-bar-fill red" id="bar-falta-des" style="width:0%"></div></div>
+      </div>
+
+      <div class="card accent-yellow">
+        <div class="card-label">Vendas Fechadas</div>
+        <div class="card-value" id="c-qtd">—</div>
+        <div class="card-sub" id="c-qtd-sub">no mês corrente</div>
+        <div class="mini-bar"><div class="mini-bar-fill yellow" id="bar-qtd" style="width:0%"></div></div>
+      </div>
+    </div>
+
+    <!-- GRÁFICOS -->
+    <div class="charts-row">
+
+      <!-- DONUT META DESEJÁVEL -->
+      <div class="panel">
+        <div class="panel-title">Meta Desejável do Mês</div>
+        <div class="donut-wrap">
+          <canvas id="chart-donut"></canvas>
+          <div class="donut-center">
+            <div class="donut-pct" id="donut-pct-text">0%</div>
+            <div class="donut-label">Realizado</div>
+          </div>
+        </div>
+        <div class="donut-legend">
+          <div class="legend-item">
+            <div class="legend-left"><div class="legend-dot" style="background:var(--accent)"></div>Realizado</div>
+            <div class="legend-val" id="leg-realizado">0%</div>
+          </div>
+          <div class="legend-item">
+            <div class="legend-left"><div class="legend-dot" style="background:var(--subtle)"></div>Falta</div>
+            <div class="legend-val" id="leg-falta">0%</div>
+          </div>
+          <div class="legend-item">
+            <div class="legend-left"><div class="legend-dot" style="background:var(--green)"></div>Meta Mínima</div>
+            <div class="legend-val" id="leg-min">0%</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ACUMULADO ANUAL -->
+      <div class="panel">
+        <div class="panel-title">Acumulado Anual — % da Meta Desejável</div>
+        <div class="acum-stats">
+          <div class="acum-stat">
+            <div class="acum-stat-val" id="acum-pct-real" style="color:var(--accent)">0%</div>
+            <div class="acum-stat-label">% Atingido Acumulado</div>
+          </div>
+          <div class="acum-stat">
+            <div class="acum-stat-val" id="acum-pct-falta" style="color:var(--red)">0%</div>
+            <div class="acum-stat-label">% Falta Acumulado</div>
+          </div>
+          <div class="acum-stat">
+            <div class="acum-stat-val" id="acum-vendas" style="color:var(--muted)">0</div>
+            <div class="acum-stat-label">Vendas no Ano</div>
+          </div>
+        </div>
+        <div class="acum-chart-wrap">
+          <canvas id="chart-bar"></canvas>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- VENDAS + RANKING -->
+    <div class="bottom-row">
+
+      <div class="panel">
+        <div class="panel-title">Últimas Vendas</div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Data</th>
+                <th>Reserva</th>
+                <th>Cliente</th>
+                <th>Vendedor</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="tabela-vendas">
+              <tr><td colspan="5" style="color:var(--muted);padding:20px;text-align:center">Carregando…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">Ranking de Vendedores — % da Meta</div>
+        <div class="ranking-list" id="ranking-list">
+          <div style="color:var(--muted);font-size:13px;padding:16px 0;text-align:center">Carregando…</div>
+        </div>
+      </div>
+
+    </div>
+
+  </main>
+</div>
+
+<script>
+/* ================================================================
+   CONFIGURAÇÃO — NÃO PRECISA MEXER EM MAIS NADA
+   ================================================================ */
+const CONFIG = {
+  // URL base do site SharePoint
+  SP_URL : "https://escapesessenta.sharepoint.com/sites/PainelComercial",
+
+  // Nome da lista de vendas
+  LIST_NAME : "Controle Painel TV",
+
+  // Campos da lista de vendas (nomes internos do SharePoint)
+  FIELDS: {
+    reserva  : "Reserva",    // coluna Reserva
+    cliente  : "Cliente",    // coluna Cliente
+    vendedor : "Vendedor",   // coluna Vendedor
+    valor    : "Valor",      // coluna Valor (número)
+    status   : "Status",     // coluna Status
+    data     : "DataVenda",  // coluna DataVenda
+  },
+
+  // Arquivo Excel da meta — nome da aba
+  META_SHEET : "Metas Comercial 2026",
+
+  // Intervalo de atualização (30 segundos)
+  REFRESH_MS : 30000,
+
+  // Nomes dos meses em português (para bater com a planilha)
+  MESES_PT : ["Janeiro","Fevereiro","Março","Abril","Maio","Junho",
+              "Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"],
+  MESES_LABEL : ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"],
+};
+
+/* ================================================================
+   ESTADO GLOBAL
+   ================================================================ */
+let STATE = {
+  vendas           : [],
+  metaMin          : 0,
+  metaDes          : 0,
+  metasPorMes      : [],   // [{min, des}] índice 0=Jan
+  ultimoIdProcessado: 0,
+  chartDonut       : null,
+  chartBar         : null,
+  alertTimer       : null,
+  primeiraLeitura  : true,
+};
+
+/* ================================================================
+   HELPERS DE REQUISIÇÃO AO SHAREPOINT
+   A TV já está logada no M365, então o cookie de sessão é enviado
+   automaticamente — sem precisar de token manual.
+   ================================================================ */
+async function spFetch(url) {
+  const res = await fetch(url, {
+    credentials : "include",   // usa o login já existente no navegador
+    headers     : { "Accept": "application/json;odata=verbose" },
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status} — ${url}`);
+  return res.json();
+}
+
+/* ================================================================
+   1. BUSCAR METAS DO EXCEL VIA SHAREPOINT REST
+   ================================================================ */
+async function buscarMetas() {
+  // Busca o arquivo MetaMensal.xlsx e lê via Excel REST API do SharePoint
+  const endpointExcel =
+    `${CONFIG.SP_URL}/_api/web/GetFileByServerRelativeUrl` +
+    `('/sites/PainelComercial/MetaMensal.xlsx')` +
+    `/$value`;
+
+  // O SharePoint não lê Excel diretamente via REST clássico,
+  // então usamos uma Lista auxiliar ou lemos o Excel via Graph.
+  // Como a TV está logada, usamos Microsoft Graph (não precisa de token extra
+  // quando o navegador já tem sessão M365 com cookie):
+  const graphUrl =
+    `https://graph.microsoft.com/v1.0/sites/escapesessenta.sharepoint.com:/sites/PainelComercial` +
+    `:/drive/root:/MetaMensal.xlsx:/workbook/worksheets('Metas%20Comercial%202026')/usedRange`;
+
+  const res = await fetch(graphUrl, {
+    credentials : "include",
+    headers     : { "Accept": "application/json" },
+  });
+  if (!res.ok) throw new Error("Erro ao buscar metas do Excel");
+  const data = await res.json();
+
+  // data.values = array de linhas [ [Ano, Mês, MetaMínima, MetaDesejável], ... ]
+  // Linha 0 = cabeçalho, linhas 1-12 = dados
+  const linhas = data.values || [];
+  const metas  = new Array(12).fill(null).map(() => ({ min:0, des:0 }));
+
+  linhas.slice(1).forEach(row => {
+    const mesNome = String(row[1] || "").trim();
+    const idx     = CONFIG.MESES_PT.findIndex(m => m === mesNome);
+    if (idx >= 0) {
+      metas[idx].min = parseNum(row[2]);
+      metas[idx].des = parseNum(row[3]);
+    }
+  });
+
+  STATE.metasPorMes = metas;
+  const agora = new Date();
+  STATE.metaMin = metas[agora.getMonth()].min;
+  STATE.metaDes = metas[agora.getMonth()].des;
+}
+
+/* ================================================================
+   2. BUSCAR VENDAS DA LISTA SHAREPOINT
+   ================================================================ */
+async function buscarVendas() {
+  const f = CONFIG.FIELDS;
+  const url =
+    `${CONFIG.SP_URL}/_api/web/lists/getbytitle('${encodeURIComponent(CONFIG.LIST_NAME)}')/items` +
+    `?$select=ID,${f.reserva},${f.cliente},${f.vendedor},${f.valor},${f.status},${f.data}` +
+    `&$orderby=ID desc&$top=500`;
+
+  const json = await spFetch(url);
+  return (json.d?.results || []).map(item => ({
+    ID      : item.ID,
+    reserva : item[f.reserva]  || "",
+    cliente : item[f.cliente]  || "",
+    vendedor: item[f.vendedor] || "",
+    valor   : parseNum(item[f.valor]),
+    status  : item[f.status]   || "",
+    data    : item[f.data]     ? new Date(item[f.data]).toLocaleDateString("pt-BR") : "—",
+    dataObj : item[f.data]     ? new Date(item[f.data]) : null,
+  }));
+}
+
+/* ================================================================
+   3. CICLO PRINCIPAL
+   ================================================================ */
+async function atualizar() {
+  try {
+    // Busca metas e vendas em paralelo
+    await Promise.all([buscarMetas(), buscarVendas().then(v => { STATE.vendas = v; })]);
+
+    // Detecta novas vendas fechadas (apenas após primeira leitura)
+    if (!STATE.primeiraLeitura) {
+      const novas = STATE.vendas.filter(v =>
+        v.ID > STATE.ultimoIdProcessado &&
+        statusFechado(v.status)
+      );
+      if (novas.length > 0) dispararAlerta(novas[novas.length - 1]);
+    }
+
+    const maxId = STATE.vendas.length ? Math.max(...STATE.vendas.map(v=>v.ID)) : 0;
+    STATE.ultimoIdProcessado = maxId;
+    STATE.primeiraLeitura = false;
+
+    // Renderiza
+    renderCards();
+    renderGraficos();
+    renderTabela();
+    renderRanking();
+    renderHeader();
+
+    // Esconde loading e erro
+    document.getElementById("loading-screen").style.display = "none";
+    document.getElementById("error-badge").style.display    = "none";
+
+  } catch (err) {
+    console.error("Erro ao carregar dados:", err);
+    document.getElementById("loading-screen").style.display = "none";
+    document.getElementById("error-badge").style.display    = "inline-block";
+  }
+}
+
+/* ================================================================
+   RENDERIZAÇÃO — CARDS
+   ================================================================ */
+function renderCards() {
+  const agora = new Date();
+  const mes   = agora.getMonth();
+  const ano   = agora.getFullYear();
+
+  const doMes = STATE.vendas.filter(v =>
+    v.dataObj &&
+    v.dataObj.getMonth() === mes &&
+    v.dataObj.getFullYear() === ano &&
+    statusFechado(v.status)
+  );
+
+  const realizado = doMes.reduce((s,v) => s+v.valor, 0);
+  const metaMin   = STATE.metaMin || 1;
+  const metaDes   = STATE.metaDes || 1;
+
+  const pctMin = Math.min((realizado/metaMin)*100, 999);
+  const pctDes = Math.min((realizado/metaDes)*100, 999);
+  const faltaMin = Math.max(100 - pctMin, 0);
+  const faltaDes = Math.max(100 - pctDes, 0);
+
+  set("c-pct-min",    fmt1(pctMin) + "%");
+  set("c-pct-des",    fmt1(pctDes) + "%");
+  set("c-falta-min",  fmt1(faltaMin) + "%");
+  set("c-falta-des",  fmt1(faltaDes) + "%");
+  set("c-qtd",        doMes.length.toString());
+  set("c-qtd-sub",    `${doMes.length} venda${doMes.length!==1?"s":""} fechada${doMes.length!==1?"s":""}`);
+
+  setW("bar-pct-min",  Math.min(pctMin,100));
+  setW("bar-pct-des",  Math.min(pctDes,100));
+  setW("bar-falta-min",faltaMin);
+  setW("bar-falta-des",faltaDes);
+  setW("bar-qtd",      Math.min(doMes.length*5, 100));
+
+  // Donut legend
+  set("leg-realizado", fmt1(pctDes) + "%");
+  set("leg-falta",     fmt1(faltaDes) + "%");
+  set("leg-min",       fmt1(pctMin) + "% (mín)");
+  set("donut-pct-text", fmt1(pctDes) + "%");
+}
+
+/* ================================================================
+   RENDERIZAÇÃO — GRÁFICOS
+   ================================================================ */
+function renderGraficos() {
+  const agora = new Date();
+  const mes   = agora.getMonth();
+  const ano   = agora.getFullYear();
+
+  // Vendas fechadas do mês
+  const doMes = STATE.vendas.filter(v =>
+    v.dataObj &&
+    v.dataObj.getMonth() === mes &&
+    v.dataObj.getFullYear() === ano &&
+    statusFechado(v.status)
+  );
+  const realizado = doMes.reduce((s,v)=>s+v.valor, 0);
+  const metaDes   = STATE.metaDes || 1;
+  const pctDes    = Math.min((realizado/metaDes)*100, 100);
+  const faltaDes  = Math.max(100 - pctDes, 0);
+
+  // ── DONUT ──────────────────────────────────────────────────────
+  const donutData = [pctDes, faltaDes];
+  if (STATE.chartDonut) {
+    STATE.chartDonut.data.datasets[0].data = donutData;
+    STATE.chartDonut.update("active");
+  } else {
+    const ctx = document.getElementById("chart-donut").getContext("2d");
+    STATE.chartDonut = new Chart(ctx, {
+      type: "doughnut",
+      data: {
+        labels: ["Realizado %","Falta %"],
+        datasets:[{
+          data: donutData,
+          backgroundColor: ["#5b8cff","#1f1f26"],
+          borderColor    : ["#5b8cff","#1f1f26"],
+          borderWidth    : 2,
+          hoverOffset    : 4,
+        }]
+      },
+      options: {
+        cutout: "72%", responsive:true,
+        plugins:{
+          legend:{display:false},
+          tooltip:{ callbacks:{ label: c => " "+fmt1(c.raw)+"%" } }
+        },
+        animation:{ animateRotate:true, duration:800 }
+      }
+    });
+  }
+
+  // ── ACUMULADO ANUAL ────────────────────────────────────────────
+  // Para cada mês até o atual, calcular % realizado vs meta desejável
+  const mesesLabels = CONFIG.MESES_LABEL.slice(0, mes+1);
+  const pctsMes     = [];
+  let totalVendas   = 0;
+  let totalReal     = 0;
+  let totalMeta     = 0;
+
+  for (let m = 0; m <= mes; m++) {
+    const vendasMes = STATE.vendas.filter(v =>
+      v.dataObj &&
+      v.dataObj.getMonth() === m &&
+      v.dataObj.getFullYear() === ano &&
+      statusFechado(v.status)
+    );
+    const realMes  = vendasMes.reduce((s,v)=>s+v.valor, 0);
+    const metaMes  = STATE.metasPorMes[m]?.des || 1;
+    const pctMes   = Math.min((realMes/metaMes)*100, 200);
+    pctsMes.push(pctMes);
+    totalReal  += realMes;
+    totalMeta  += metaMes;
+    totalVendas+= vendasMes.length;
+  }
+
+  const acumPct   = totalMeta > 0 ? Math.min((totalReal/totalMeta)*100, 999) : 0;
+  const acumFalta = Math.max(100 - acumPct, 0);
+
+  set("acum-pct-real",  fmt1(acumPct)   + "%");
+  set("acum-pct-falta", fmt1(acumFalta) + "%");
+  set("acum-vendas",    totalVendas.toString());
+
+  if (STATE.chartBar) {
+    STATE.chartBar.data.labels                    = mesesLabels;
+    STATE.chartBar.data.datasets[0].data          = pctsMes;
+    STATE.chartBar.update();
+  } else {
+    const ctx2 = document.getElementById("chart-bar").getContext("2d");
+    STATE.chartBar = new Chart(ctx2, {
+      type: "bar",
+      data: {
+        labels: mesesLabels,
+        datasets:[{
+          label          : "% Atingido da Meta Desejável",
+          data           : pctsMes,
+          backgroundColor: pctsMes.map(p => p>=100 ? "rgba(61,186,122,0.6)" : "rgba(91,140,255,0.6)"),
+          borderColor    : pctsMes.map(p => p>=100 ? "#3dba7a" : "#5b8cff"),
+          borderWidth    : 1,
+          borderRadius   : 4,
+        }]
+      },
+      options:{
+        responsive:true, maintainAspectRatio:false,
+        plugins:{
+          legend:{ labels:{ color:"#6b6b75", font:{size:11}, boxWidth:10 } },
+          tooltip:{ callbacks:{ label: c => " "+fmt1(c.raw)+"%" } },
+          annotation:{}
+        },
+        scales:{
+          x:{ grid:{color:"rgba(255,255,255,0.04)"}, ticks:{color:"#6b6b75"} },
+          y:{
+            grid:{color:"rgba(255,255,255,0.04)"},
+            ticks:{color:"#6b6b75", callback: v => v+"%"},
+            suggestedMax:120,
+          }
+        }
+      }
+    });
+  }
+}
+
+/* ================================================================
+   RENDERIZAÇÃO — TABELA
+   ================================================================ */
+function renderTabela() {
+  const tbody  = document.getElementById("tabela-vendas");
+  const recent = [...STATE.vendas].slice(0, 15);
+
+  if (!recent.length) {
+    tbody.innerHTML = `<tr><td colspan="5" style="color:var(--muted);padding:20px;text-align:center">Nenhuma venda encontrada</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = recent.map(v => {
+    const s = v.status.toLowerCase().trim();
+    let rowCls="", pilCls="pill-muted";
+
+    if (["fechado","fechada","concluído","concluida","concluído"].includes(s)) {
+      rowCls="row-fechada"; pilCls="pill-green";
+    } else if (["recusado","recusada"].includes(s)) {
+      rowCls="row-recusada"; pilCls="pill-red";
+    } else if (s.includes("negoci")) {
+      rowCls="row-negociacao"; pilCls="pill-yellow";
+    }
+
+    return `<tr class="${rowCls}">
+      <td>${v.data}</td>
+      <td>${v.reserva}</td>
+      <td>${v.cliente}</td>
+      <td>${v.vendedor}</td>
+      <td><span class="status-pill ${pilCls}">${v.status}</span></td>
+    </tr>`;
+  }).join("");
+}
+
+/* ================================================================
+   RENDERIZAÇÃO — RANKING (apenas %)
+   ================================================================ */
+function renderRanking() {
+  const agora = new Date();
+  const mes   = agora.getMonth();
+  const ano   = agora.getFullYear();
+  const metaDes = STATE.metaDes || 1;
+
+  const doMes = STATE.vendas.filter(v =>
+    v.dataObj &&
+    v.dataObj.getMonth() === mes &&
+    v.dataObj.getFullYear() === ano &&
+    statusFechado(v.status)
+  );
+
+  const por = {};
+  doMes.forEach(v => {
+    por[v.vendedor] = (por[v.vendedor]||0) + v.valor;
+  });
+
+  const ranking = Object.entries(por)
+    .map(([nome,val]) => ({ nome, pct: (val/metaDes)*100 }))
+    .sort((a,b) => b.pct - a.pct);
+
+  const list = document.getElementById("ranking-list");
+
+  if (!ranking.length) {
+    list.innerHTML = `<div style="color:var(--muted);font-size:13px;padding:16px 0;text-align:center">Sem vendas fechadas no mês</div>`;
+    return;
+  }
+
+  // Calcula % relativo ao 1º para barra interna
+  const maxPct = ranking[0].pct;
+
+  list.innerHTML = ranking.map((r,i) => {
+    const first = i===0 ? "first" : "";
+    const bar   = Math.round((r.pct/maxPct)*100);
+    return `<div class="rank-item ${first}">
+      <div class="rank-pos">${i+1}</div>
+      <div>
+        <div class="rank-name">${r.nome}</div>
+        <div class="rank-pct-sub">${fmt1(r.pct)}% da meta desejável</div>
+        <div style="margin-top:5px;height:2px;background:var(--subtle);border-radius:2px;width:${bar}%;max-width:160px;background:${i===0?'var(--green)':'var(--subtle)'}"></div>
+      </div>
+      <div class="rank-val">${fmt1(r.pct)}%</div>
+    </div>`;
+  }).join("");
+}
+
+/* ================================================================
+   HEADER
+   ================================================================ */
+function renderHeader() {
+  const agora = new Date();
+  const mes   = agora.toLocaleString("pt-BR",{month:"long",year:"numeric"});
+  set("month-badge", mes.charAt(0).toUpperCase()+mes.slice(1));
+  set("last-update", "Atualizado às " + agora.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit",second:"2-digit"}));
+}
+
+/* ================================================================
+   ALERTA
+   ================================================================ */
+function dispararAlerta(venda) {
+  tocarSino();
+  const metaDes = STATE.metaDes || 1;
+  const pct     = (venda.valor / metaDes) * 100;
+  set("alert-vendedor", venda.vendedor);
+  set("alert-pct",      fmt1(pct)+"%");
+  set("alert-label",    "da meta desejável nesta venda");
+
+  const overlay = document.getElementById("alert-overlay");
+  overlay.classList.add("visible");
+
+  const fill  = document.getElementById("alert-bar-fill");
+  const TEMPO = 7000;
+  const start = Date.now();
+  if (STATE.alertTimer) clearInterval(STATE.alertTimer);
+  STATE.alertTimer = setInterval(() => {
+    const elapsed = Date.now() - start;
+    fill.style.width = Math.max(0, 100-(elapsed/TEMPO)*100) + "%";
+    if (elapsed >= TEMPO) {
+      clearInterval(STATE.alertTimer);
+      overlay.classList.remove("visible");
+    }
+  }, 50);
+}
+
+function tocarSino() {
+  try {
+    const ctx  = new (window.AudioContext||window.webkitAudioContext)();
+    [880,1108,1320,1760].forEach((freq,i) => {
+      const osc  = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.type = "sine"; osc.frequency.value = freq;
+      const t = ctx.currentTime + i*0.13;
+      gain.gain.setValueAtTime(0, t);
+      gain.gain.linearRampToValueAtTime(0.28, t+0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, t+0.9);
+      osc.start(t); osc.stop(t+1);
+    });
+  } catch(e) { console.warn("Áudio indisponível:", e); }
+}
+
+/* ================================================================
+   UTILITÁRIOS
+   ================================================================ */
+function statusFechado(s) {
+  const sl = (s||"").toLowerCase().trim();
+  return ["fechado","fechada","concluído","concluida","concluído"].includes(sl);
+}
+function parseNum(v) {
+  if (typeof v === "number") return v;
+  return parseFloat(String(v).replace(/[^\d,.-]/g,"").replace(",",".")) || 0;
+}
+function fmt1(v) { return Number(v).toFixed(1); }
+function set(id, txt) { const el=document.getElementById(id); if(el) el.textContent=txt; }
+function setW(id, pct) { const el=document.getElementById(id); if(el) el.style.width=Math.min(pct,100)+"%"; }
+
+/* ================================================================
+   INICIALIZAÇÃO
+   ================================================================ */
+document.addEventListener("DOMContentLoaded", async () => {
+  await atualizar();
+  setInterval(atualizar, CONFIG.REFRESH_MS);
+});
+</script>
+</body>
+</html>
