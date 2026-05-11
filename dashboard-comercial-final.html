@@ -467,34 +467,7 @@ async function spFetch(url) {
   if (!res.ok) throw new Error(`HTTP ${res.status} — ${url}`);
   return res.json();
 }
-
-/* ================================================================
-   1. BUSCAR METAS DO EXCEL VIA SHAREPOINT REST
-   ================================================================ */
-async function buscarMetas() {
-  // Metas internas em percentual para o painel funcionar sem depender do Excel.
-  // Como o painel foi definido para trabalhar sem valores em reais, usamos:
-  // Meta mínima = 80
-  // Meta desejável = 100
-  // Depois podemos automatizar isso via outro JSON, se necessário.
-  const metas = new Array(12).fill(null).map(() => ({
-    min: 80,
-    des: 100
-  }));
-
-  STATE.metasPorMes = metas;
-
-  const agora = new Date();
-  STATE.metaMin = metas[agora.getMonth()].min;
-  STATE.metaDes = metas[agora.getMonth()].des;
-}
-
-/* ================================================================
-   2. BUSCAR VENDAS DA LISTA SHAREPOINT
-   ================================================================ */
-async function buscarVendas() {
-  // Lê o arquivo dados.json gerado automaticamente pelo Power Automate + GitHub Actions.
-  // O parâmetro ?t=Date.now() evita cache do navegador, importante para a TV atualizar.
+async function carregarDadosDashboard() {
   const url = "https://raw.githubusercontent.com/VBEscape60/dashboard-comercial/main/dados.json";
 
   const res = await fetch(url + "?t=" + Date.now(), {
@@ -507,18 +480,68 @@ async function buscarVendas() {
 
   let dados = await res.json();
 
-  // O workflow do GitHub salva o conteúdo como string.
-  // Se vier como string, fazemos uma segunda conversão para virar array de objetos.
-  if (typeof dados === "string") {
+  // O GitHub Action salva o payload como string.
+  // Por isso, às vezes precisamos converter mais de uma vez.
+  while (typeof dados === "string") {
     dados = JSON.parse(dados);
   }
 
-  // Segurança: se por algum motivo não vier uma lista, evita quebrar o painel.
-  if (!Array.isArray(dados)) {
-    dados = [];
+  if (dados && typeof dados.dados === "string") {
+    dados = JSON.parse(dados.dados);
   }
 
-  return dados.map(item => ({
+  if (dados && typeof dados.dados === "object") {
+    dados = dados.dados;
+  }
+
+  return dados;
+}
+
+function normalizarTexto(txt) {
+  return String(txt || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+/* ================================================================
+   1. BUSCAR METAS DO EXCEL VIA SHAREPOINT REST
+   ================================================================ */
+async function buscarMetas() {
+  const dados = await carregarDadosDashboard();
+  const linhas = Array.isArray(dados.metas) ? dados.metas : [];
+
+  const metas = new Array(12).fill(null).map(() => ({ min: 0, des: 0 }));
+
+  linhas.forEach(row => {
+    const ano = String(row["Ano"] ?? row["ano"] ?? "").trim();
+    const mesNome = String(row["Mês"] ?? row["Mes"] ?? row["mes"] ?? "").trim();
+
+    if (ano && ano !== String(new Date().getFullYear())) return;
+
+    const idx = CONFIG.MESES_PT.findIndex(m => normalizarTexto(m) === normalizarTexto(mesNome));
+    if (idx >= 0) {
+      metas[idx].min = parseNum(row["Meta Mínima"] ?? row["Meta Minima"] ?? row["metaMinima"] ?? row["MetaMinima"] ?? 0);
+      metas[idx].des = parseNum(row["Meta Desejável"] ?? row["Meta Desejavel"] ?? row["metaDesejavel"] ?? row["MetaDesejavel"] ?? 0);
+    }
+  });
+
+  STATE.metasPorMes = metas;
+
+  const agora = new Date();
+  STATE.metaMin = metas[agora.getMonth()].min || 1;
+  STATE.metaDes = metas[agora.getMonth()].des || 1;
+}
+
+/* ================================================================
+   2. BUSCAR VENDAS DA LISTA SHAREPOINT
+   ================================================================ */
+async function buscarVendas() {
+  const dados = await carregarDadosDashboard();
+  const lista = Array.isArray(dados.vendas) ? dados.vendas : Array.isArray(dados) ? dados : [];
+
+  return lista.map(item => ({
     ID       : item.ID || item.Id || item.id || item.ItemInternalId || 0,
     reserva  : item.Reserva || item.Title || "",
     cliente  : item.Cliente || "",
