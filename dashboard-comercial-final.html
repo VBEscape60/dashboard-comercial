@@ -247,7 +247,7 @@
 <!-- TELA DE LOADING -->
 <div id="loading-screen">
   <div class="loading-spinner"></div>
-  <div class="loading-text">Conectando ao SharePoint…</div>
+  <div class="loading-text">Carregando dados do painel…</div>
 </div>
 
 <!-- ALERTA VENDA FECHADA -->
@@ -472,42 +472,18 @@ async function spFetch(url) {
    1. BUSCAR METAS DO EXCEL VIA SHAREPOINT REST
    ================================================================ */
 async function buscarMetas() {
-  // Busca o arquivo MetaMensal.xlsx e lê via Excel REST API do SharePoint
-  const endpointExcel =
-    `${CONFIG.SP_URL}/_api/web/GetFileByServerRelativeUrl` +
-    `('/sites/PainelComercial/MetaMensal.xlsx')` +
-    `/$value`;
-
-  // O SharePoint não lê Excel diretamente via REST clássico,
-  // então usamos uma Lista auxiliar ou lemos o Excel via Graph.
-  // Como a TV está logada, usamos Microsoft Graph (não precisa de token extra
-  // quando o navegador já tem sessão M365 com cookie):
-  const graphUrl =
-    `https://graph.microsoft.com/v1.0/sites/escapesessenta.sharepoint.com:/sites/PainelComercial` +
-    `:/drive/root:/MetaMensal.xlsx:/workbook/worksheets('Metas%20Comercial%202026')/usedRange`;
-
-  const res = await fetch(graphUrl, {
-    credentials : "include",
-    headers     : { "Accept": "application/json" },
-  });
-  if (!res.ok) throw new Error("Erro ao buscar metas do Excel");
-  const data = await res.json();
-
-  // data.values = array de linhas [ [Ano, Mês, MetaMínima, MetaDesejável], ... ]
-  // Linha 0 = cabeçalho, linhas 1-12 = dados
-  const linhas = data.values || [];
-  const metas  = new Array(12).fill(null).map(() => ({ min:0, des:0 }));
-
-  linhas.slice(1).forEach(row => {
-    const mesNome = String(row[1] || "").trim();
-    const idx     = CONFIG.MESES_PT.findIndex(m => m === mesNome);
-    if (idx >= 0) {
-      metas[idx].min = parseNum(row[2]);
-      metas[idx].des = parseNum(row[3]);
-    }
-  });
+  // Metas internas em percentual para o painel funcionar sem depender do Excel.
+  // Como o painel foi definido para trabalhar sem valores em reais, usamos:
+  // Meta mínima = 80
+  // Meta desejável = 100
+  // Depois podemos automatizar isso via outro JSON, se necessário.
+  const metas = new Array(12).fill(null).map(() => ({
+    min: 80,
+    des: 100
+  }));
 
   STATE.metasPorMes = metas;
+
   const agora = new Date();
   STATE.metaMin = metas[agora.getMonth()].min;
   STATE.metaDes = metas[agora.getMonth()].des;
@@ -517,22 +493,40 @@ async function buscarMetas() {
    2. BUSCAR VENDAS DA LISTA SHAREPOINT
    ================================================================ */
 async function buscarVendas() {
-  const f = CONFIG.FIELDS;
-  const url =
-    `${CONFIG.SP_URL}/_api/web/lists/getbytitle('${encodeURIComponent(CONFIG.LIST_NAME)}')/items` +
-    `?$select=ID,${f.reserva},${f.cliente},${f.vendedor},${f.valor},${f.status},${f.data}` +
-    `&$orderby=ID desc&$top=500`;
+  // Lê o arquivo dados.json gerado automaticamente pelo Power Automate + GitHub Actions.
+  // O parâmetro ?t=Date.now() evita cache do navegador, importante para a TV atualizar.
+  const url = "https://raw.githubusercontent.com/VBEscape60/dashboard-comercial/main/dados.json";
 
-  const json = await spFetch(url);
-  return (json.d?.results || []).map(item => ({
-    ID      : item.ID,
-    reserva : item[f.reserva]  || "",
-    cliente : item[f.cliente]  || "",
-    vendedor: item[f.vendedor] || "",
-    valor   : parseNum(item[f.valor]),
-    status  : item[f.status]   || "",
-    data    : item[f.data]     ? new Date(item[f.data]).toLocaleDateString("pt-BR") : "—",
-    dataObj : item[f.data]     ? new Date(item[f.data]) : null,
+  const res = await fetch(url + "?t=" + Date.now(), {
+    cache: "no-store"
+  });
+
+  if (!res.ok) {
+    throw new Error("Erro ao carregar dados.json");
+  }
+
+  let dados = await res.json();
+
+  // O workflow do GitHub salva o conteúdo como string.
+  // Se vier como string, fazemos uma segunda conversão para virar array de objetos.
+  if (typeof dados === "string") {
+    dados = JSON.parse(dados);
+  }
+
+  // Segurança: se por algum motivo não vier uma lista, evita quebrar o painel.
+  if (!Array.isArray(dados)) {
+    dados = [];
+  }
+
+  return dados.map(item => ({
+    ID       : item.ID || item.Id || item.id || item.ItemInternalId || 0,
+    reserva  : item.Reserva || item.Title || "",
+    cliente  : item.Cliente || "",
+    vendedor : item.Vendedor || "",
+    valor    : parseNum(item.Valor),
+    status   : item.Status || "",
+    data     : item.DataVenda ? new Date(item.DataVenda).toLocaleDateString("pt-BR") : "—",
+    dataObj  : item.DataVenda ? new Date(item.DataVenda) : null,
   }));
 }
 
