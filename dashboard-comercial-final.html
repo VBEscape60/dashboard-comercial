@@ -256,10 +256,11 @@ async function fetchDealsRD() {
     let estado = 'Em Andamento';
     if (d.win)  estado = 'Vendida';
     if (d.lost) estado = 'Perdida';
-    // Data de fechamento (closed_at)
+    // Data: closed_at para vendidas, updated_at como fallback para perdidas/andamento
     let dt = '';
-    if (d.closed_at) {
-      const raw = (d.closed_at + '').replace(' ','T');
+    const rawDate = d.closed_at || (estado !== 'Vendida' ? d.updated_at : null);
+    if (rawDate) {
+      const raw = (rawDate + '').replace(' ','T');
       const dateObj = new Date(raw);
       if (!isNaN(dateObj)) {
         const y = dateObj.getFullYear();
