@@ -435,22 +435,25 @@ function shuffleArray(arr){
 let tabelaOrdem=[], tabelaMesRef=-1;
 
 function iniciarTabela(deals, mes, ano){
-  // Filtra pelo mês atual via data de fechamento
+  // Vendidas e Em Andamento: filtra pelo mês atual
   const doMes = deals.filter(d=>{
     if(!d.d) return false;
     const dt = new Date(d.d+'T12:00:00');
     return dt.getMonth()===mes && dt.getFullYear()===ano;
   });
 
-  // Separa por estado — proporção IGUAL entre Vendida, Perdida e Em Andamento
   const vendidas  = doMes.filter(d=>d.s==='Vendida');
-  const perdidas  = doMes.filter(d=>d.s==='Perdida');
   const andamento = doMes.filter(d=>d.s==='Em Andamento');
+
+  // Perdidas: pega as mais recentes do ano todo (RD não registra closed_at para perdidas)
+  const perdidas = deals
+    .filter(d=>d.s==='Perdida' && d.d)
+    .sort((a,b)=>b.d.localeCompare(a.d))
+    .slice(0,20);
 
   function pick(arr, n){ return shuffleArray(arr).slice(0,n); }
 
   function montarMix(){
-    // ~5 de cada estado, total 16
     const v = pick(vendidas,  Math.min(vendidas.length,  6));
     const a = pick(andamento, Math.min(andamento.length, 5));
     const p = pick(perdidas,  Math.min(perdidas.length,  16 - v.length - a.length));
