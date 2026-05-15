@@ -249,7 +249,8 @@ async function fetchDealsRD() {
   const res = await fetch(DADOS_URL + '?t=' + Date.now());
   if (!res.ok) throw new Error('dados.json HTTP ' + res.status);
   const data = await res.json();
-  const list = data.deals || [];
+  // Suporta tanto {deals: [...]} quanto array direto (quando union() retorna array)
+  const list = Array.isArray(data) ? data : (data.deals || []);
   // Normaliza formato RD Station para formato interno do dashboard
   const normalized = list.map(d => {
     // Estado
