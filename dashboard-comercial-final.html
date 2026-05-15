@@ -175,7 +175,7 @@ html,body{
   <div class="tb-right">
     <div class="tb-mes" id="tb-mes">—</div>
     <div class="tb-upd" id="tb-upd">—</div>
-    <button onclick="mostrarAlerta('N11486 - CNN Brasil','CNN Brasil','Nayara Borango')" style="padding:3px 10px;border-radius:8px;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);color:#22c55e;font-size:10px;font-family:'DM Sans',sans-serif;cursor:pointer;">🏆 Testar Alerta</button>
+    <button onclick="mostrarAlerta('Venda Fechada!','Cliente Exemplo','Vendedor Exemplo')" style="padding:3px 10px;border-radius:8px;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);color:#22c55e;font-size:10px;font-family:'DM Sans',sans-serif;cursor:pointer;">🏆 Testar Alerta</button>
   </div>
 </div>
 
@@ -434,44 +434,34 @@ function shuffleArray(arr){
 let tabelaOrdem=[], tabelaMesRef=-1;
 
 function iniciarTabela(deals, mes, ano){
-  // Filtra pelo mês atual via data de fechamento (coluna T)
+  // Filtra pelo mês atual via data de fechamento
   const doMes = deals.filter(d=>{
     if(!d.d) return false;
     const dt = new Date(d.d+'T12:00:00');
     return dt.getMonth()===mes && dt.getFullYear()===ano;
   });
 
-  // Separa por estado para garantir mix equilibrado
-  const vendidas   = doMes.filter(d=>d.s==='Vendida');
-  const perdidas   = doMes.filter(d=>d.s==='Perdida');
-  const andamento  = doMes.filter(d=>d.s==='Em Andamento');
+  // Separa por estado — proporção IGUAL entre Vendida, Perdida e Em Andamento
+  const vendidas  = doMes.filter(d=>d.s==='Vendida');
+  const perdidas  = doMes.filter(d=>d.s==='Perdida');
+  const andamento = doMes.filter(d=>d.s==='Em Andamento');
 
-  // Monta lista com no máximo 12, priorizando mix:
-  // até 4 vendidas, até 4 em andamento, resto perdidas
   function pick(arr, n){ return shuffleArray(arr).slice(0,n); }
-  const qtdV = Math.min(vendidas.length, 5);
-  const qtdA = Math.min(andamento.length, 5);
-  const qtdP = Math.min(perdidas.length, 16 - qtdV - qtdA);
-  const mixed = shuffleArray([
-    ...pick(vendidas, qtdV),
-    ...pick(andamento, qtdA),
-    ...pick(perdidas, qtdP)
-  ]);
 
-  tabelaOrdem = mixed;
+  function montarMix(){
+    // ~5 de cada estado, total 16
+    const v = pick(vendidas,  Math.min(vendidas.length,  6));
+    const a = pick(andamento, Math.min(andamento.length, 5));
+    const p = pick(perdidas,  Math.min(perdidas.length,  16 - v.length - a.length));
+    return shuffleArray([...v, ...a, ...p]);
+  }
+
+  tabelaOrdem = montarMix();
   tabelaMesRef = mes;
   renderTabela();
   clearInterval(tabelaTimer);
   tabelaTimer = setInterval(()=>{
-    // A cada 10min refaz o mix com novo embaralhamento
-    const qtdV2 = Math.min(vendidas.length, 5);
-    const qtdA2 = Math.min(andamento.length, 5);
-    const qtdP2 = Math.min(perdidas.length, 16 - qtdV2 - qtdA2);
-    tabelaOrdem = shuffleArray([
-      ...pick(vendidas, qtdV2),
-      ...pick(andamento, qtdA2),
-      ...pick(perdidas, qtdP2)
-    ]);
+    tabelaOrdem = montarMix();
     renderTabela();
   }, 10*60*1000);
 }
@@ -596,20 +586,24 @@ function render(){
   // Tabela rotativa — mês atual, coluna T (data fechamento), coluna X (responsável)
   iniciarTabela(DEALS_DATA, mes, ano);
 
-  // Ranking por VALOR (campo v) — mês/ano via data de fechamento (campo d)
-  // Responsável = campo r. Valor não é exibido, apenas % relativo
+  // Ranking por VALOR — exclui Tatiane Mustafa (gerente)
+  const EXCLUIR_RANKING = ['tatiane mustafa', 'tatiane'];
+  function excluirRanking(nome){ return EXCLUIR_RANKING.some(e => (nome||'').toLowerCase().includes(e)); }
+
   const mapRval={}, mapRqtd={};
   DEALS_DATA.forEach(d=>{
     if(d.s!=='Vendida'||!d.d) return;
     const dt=new Date(d.d+'T12:00:00');
     if(dt.getMonth()!==mes||dt.getFullYear()!==ano) return;
     const n=d.r||'Sem responsável';
+    if(excluirRanking(n)) return; // exclui gerente
     mapRval[n]=(mapRval[n]||0)+(parseFloat(d.v)||0);
     mapRqtd[n]=(mapRqtd[n]||0)+1;
   });
   // Todos vendedores que venderam no ano aparecem (0 se não venderam no mês)
   DEALS_DATA.forEach(d=>{
     if(d.s!=='Vendida'||!d.r) return;
+    if(excluirRanking(d.r)) return; // exclui gerente
     const dt=new Date((d.d||'2000-01-01')+'T12:00:00');
     if(dt.getFullYear()===ano){
       if(!mapRval.hasOwnProperty(d.r)){mapRval[d.r]=0;mapRqtd[d.r]=0;}
@@ -664,23 +658,29 @@ async function init() {
 
     render();
 
-    // Verifica nova venda para alerta
-    const now = new Date(), mes = now.getMonth(), ano = now.getFullYear();
-    const vendasMes = DEALS_DATA.filter(d => {
-      if (d.s !== 'Vendida' || !d.d) return false;
-      const dt = new Date(d.d + 'T12:00:00');
-      return dt.getMonth() === mes && dt.getFullYear() === ano;
-    }).sort((a,b) => b.d.localeCompare(a.d));
+    // Verifica novas vendas para alerta
+    // Usa conjunto de IDs para detectar QUALQUER nova venda, de qualquer vendedor
+    const vendasTodas = DEALS_DATA.filter(d => d.s === 'Vendida' && d.n);
+    const idsAtuais = vendasTodas.map(d => d.n).join('|');
 
-    if (vendasMes.length > 0) {
-      const ultima = vendasMes[0];
-      const idKey  = ultima.d + '_' + ultima.n;
-      if (ultimaVendaId && ultimaVendaId !== idKey) {
-        mostrarAlerta(ultima.n, ultima.e, ultima.r);
+    // Carrega IDs anteriores do localStorage
+    const idsAnteriores = localStorage.getItem('vendasIds') || '';
+
+    if (idsAnteriores && idsAnteriores !== idsAtuais) {
+      // Encontra vendas novas (que não estavam antes)
+      const setAnterior = new Set(idsAnteriores.split('|'));
+      const novas = vendasTodas.filter(d => !setAnterior.has(d.n));
+      if (novas.length > 0) {
+        // Mostra alerta para cada nova venda
+        novas.forEach((venda, i) => {
+          setTimeout(() => {
+            mostrarAlerta(venda.n, venda.e, venda.r);
+          }, i * 9000); // espaça 9s entre alertas se houver mais de uma
+        });
       }
-      ultimaVendaId = idKey;
-      localStorage.setItem('ultimaVendaId', idKey);
     }
+    // Salva IDs atuais
+    localStorage.setItem('vendasIds', idsAtuais);
 
     document.getElementById('tb-upd').textContent =
       'Atualizado às ' + new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
