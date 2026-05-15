@@ -253,12 +253,18 @@ async function fetchDealsRD() {
   // Normaliza formato RD Station para formato interno do dashboard
   const normalized = list.map(d => {
     // Estado
+    // RD Station: win=true = Vendida
+    // lost=true OU (win=false + closed_at + deal_lost_reason) = Perdida
+    // senão = Em Andamento
     let estado = 'Em Andamento';
-    if (d.win)  estado = 'Vendida';
-    if (d.lost) estado = 'Perdida';
-    // Data: closed_at para vendidas, updated_at como fallback para perdidas/andamento
+    if (d.win) {
+      estado = 'Vendida';
+    } else if (d.lost || (d.closed_at && d.deal_lost_reason)) {
+      estado = 'Perdida';
+    }
+    // Data: closed_at para vendidas e perdidas, updated_at para em andamento
     let dt = '';
-    const rawDate = d.closed_at || (estado !== 'Vendida' ? d.updated_at : null);
+    const rawDate = d.closed_at || (estado === 'Em Andamento' ? d.updated_at : null);
     if (rawDate) {
       const raw = (rawDate + '').replace(' ','T');
       const dateObj = new Date(raw);
