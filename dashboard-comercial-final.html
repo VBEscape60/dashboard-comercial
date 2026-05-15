@@ -501,8 +501,21 @@ function render(){
   const pl=(PLANILHA[ano]||{})[mesNome]||{fat:0,min:0,des:0};
   const fatMes=pl.fat,metaMin=pl.min,metaDes=pl.des;
 
+  // % do mês atual
   const pAmin=pct(fatMes,metaMin),pAdes=pct(fatMes,metaDes);
-  const pFmin=Math.max(0,100-pAmin),pFdes=Math.max(0,100-pAdes);
+
+  // Falta: baseado no acumulado (jan até mês atual) vs meta acumulada
+  // Calcula faturado acumulado e meta acumulada até o mês atual
+  let fatAcum=0, metaMinAcum=0, metaDesAcum=0;
+  for(let i=0;i<=mes;i++){
+    const mn=MESES_PT[i];
+    const p=(PLANILHA[ano]||{})[mn]||{fat:0,min:0,des:0};
+    fatAcum+=p.fat; metaMinAcum+=p.min; metaDesAcum+=p.des;
+  }
+  const pAcumMin=pct(fatAcum,metaMinAcum);
+  const pAcumDes=pct(fatAcum,metaDesAcum);
+  const pFmin=Math.max(0,100-pAcumMin);
+  const pFdes=Math.max(0,100-pAcumDes);
 
   document.getElementById('k-amin').textContent=fP(pAmin);
   document.getElementById('k-ades').textContent=fP(pAdes);
@@ -542,6 +555,7 @@ function render(){
   document.getElementById('ac-ating').textContent=fP(pAA);
   document.getElementById('ac-falta').textContent=fP(pFA);
 
+  // Vendas no ano: conta por closed_at (campo d)
   const vAno=DEALS_DATA.filter(d=>{
     if(d.s!=='Vendida'||!d.d)return false;
     const dt=new Date(d.d+'T12:00:00');
@@ -556,15 +570,20 @@ function render(){
     const p=(PLANILHA[ano]||{})[mn]||{fat:0,des:0};
     blabels.push(mn.substring(0,3)+'/'+String(ano).slice(2));
     bvals.push(p.des>0?Math.round(pct(p.fat,p.des)*10)/10:0);
+    // cor: azul=mês atual, verde=bateu, vermelho=não bateu (mês já encerrado)
   }
+  const mesAtual = mes; // captura mes no escopo correto para usar no chart
+  // Gera arrays de cores ANTES de criar o chart
+  const bcores  = bvals.map((v,i)=> i===mesAtual ? 'rgba(59,130,246,0.6)' : v>=100 ? 'rgba(34,197,94,0.75)' : 'rgba(239,68,68,0.65)');
+  const bbordes = bvals.map((v,i)=> i===mesAtual ? '#3b82f6' : v>=100 ? '#22c55e' : '#ef4444');
   const c2=document.getElementById('bar-anual').getContext('2d');
-  if(cBar)cBar.destroy();
+  if(cBar){cBar.destroy();cBar=null;}
   cBar=new Chart(c2,{
     type:'bar',
     data:{labels:blabels,datasets:[{
       label:'% Atingido por mês',data:bvals,
-      backgroundColor:bvals.map(v=>v>=100?'rgba(34,197,94,0.75)':'rgba(59,130,246,0.6)'),
-      borderColor:bvals.map(v=>v>=100?'#22c55e':'#3b82f6'),
+      backgroundColor:bcores,
+      borderColor:bbordes,
       borderWidth:1,borderRadius:3
     }]},
     options:{
@@ -597,28 +616,22 @@ function render(){
   iniciarTabela(DEALS_DATA, mes, ano);
 
   // Ranking por VALOR — exclui Tatiane Mustafa (gerente)
-  const EXCLUIR_RANKING = ['tatiane mustafa', 'tatiane'];
+  const EXCLUIR_RANKING = ['tatiane mustafa', 'tatiane', 'kelly'];
   function excluirRanking(nome){ return EXCLUIR_RANKING.some(e => (nome||'').toLowerCase().includes(e)); }
 
   const mapRval={}, mapRqtd={};
+  // Ranking: usa closed_at (campo d) do mês vigente
+  // Só aparecem vendedores que fecharam vendas no mês
   DEALS_DATA.forEach(d=>{
     if(d.s!=='Vendida'||!d.d) return;
     const dt=new Date(d.d+'T12:00:00');
     if(dt.getMonth()!==mes||dt.getFullYear()!==ano) return;
     const n=d.r||'Sem responsável';
-    if(excluirRanking(n)) return; // exclui gerente
+    if(excluirRanking(n)) return;
     mapRval[n]=(mapRval[n]||0)+(parseFloat(d.v)||0);
     mapRqtd[n]=(mapRqtd[n]||0)+1;
   });
-  // Todos vendedores que venderam no ano aparecem (0 se não venderam no mês)
-  DEALS_DATA.forEach(d=>{
-    if(d.s!=='Vendida'||!d.r) return;
-    if(excluirRanking(d.r)) return; // exclui gerente
-    const dt=new Date((d.d||'2000-01-01')+'T12:00:00');
-    if(dt.getFullYear()===ano){
-      if(!mapRval.hasOwnProperty(d.r)){mapRval[d.r]=0;mapRqtd[d.r]=0;}
-    }
-  });
+  // NÃO adiciona vendedores com 0 — só mostra quem vendeu no mês
   const sortedR=Object.entries(mapRval).sort((a,b)=>b[1]-a[1]);
   const maxV=sortedR[0]?.[1]||1;
   const totV=Object.values(mapRval).reduce((s,v)=>s+v,0)||1;
@@ -669,28 +682,31 @@ async function init() {
     render();
 
     // Verifica novas vendas para alerta
-    // Usa conjunto de IDs para detectar QUALQUER nova venda, de qualquer vendedor
-    const vendasTodas = DEALS_DATA.filter(d => d.s === 'Vendida' && d.n);
-    const idsAtuais = vendasTodas.map(d => d.n).join('|');
+    // Chave = nome + closed_at (data/hora exata do fechamento)
+    // Ordena por closed_at para respeitar a ordem cronológica
+    const vendasFechadas = DEALS_DATA
+      .filter(d => d.s === 'Vendida' && d.n && d.d)
+      .sort((a,b) => a.d.localeCompare(b.d)); // ordem crescente por data
 
-    // Carrega IDs anteriores do localStorage
-    const idsAnteriores = localStorage.getItem('vendasIds') || '';
+    // Cada venda tem chave única: nome + data fechamento
+    const chaveAtual = vendasFechadas.map(d => d.n + '::' + d.d).join('|');
+    const chaveAnterior = localStorage.getItem('vendasChaves') || '';
 
-    if (idsAnteriores && idsAnteriores !== idsAtuais) {
-      // Encontra vendas novas (que não estavam antes)
-      const setAnterior = new Set(idsAnteriores.split('|'));
-      const novas = vendasTodas.filter(d => !setAnterior.has(d.n));
-      if (novas.length > 0) {
-        // Mostra alerta para cada nova venda
-        novas.forEach((venda, i) => {
-          setTimeout(() => {
-            mostrarAlerta(venda.n, venda.e, venda.r);
-          }, i * 9000); // espaça 9s entre alertas se houver mais de uma
-        });
-      }
+    if (chaveAnterior && chaveAnterior !== chaveAtual) {
+      const setAnterior = new Set(chaveAnterior.split('|'));
+      // Novas = fechamento que não existia antes
+      const novas = vendasFechadas.filter(d => !setAnterior.has(d.n + '::' + d.d));
+      // Ordena por closed_at para alertar na ordem correta
+      novas.sort((a,b) => a.d.localeCompare(b.d));
+      // Limita a 3 alertas por vez para não sobrecarregar
+      const novasLimitadas = novas.slice(-5); // pega as 5 mais recentes
+      novasLimitadas.forEach((venda, i) => {
+        setTimeout(() => {
+          mostrarAlerta(venda.n, venda.e, venda.r);
+        }, i * 9000);
+      });
     }
-    // Salva IDs atuais
-    localStorage.setItem('vendasIds', idsAtuais);
+    localStorage.setItem('vendasChaves', chaveAtual);
 
     document.getElementById('tb-upd').textContent =
       'Atualizado às ' + new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
