@@ -183,8 +183,8 @@ html,body{
   <div class="kpi-row">
     <div class="kpi g"><div class="kpi-lbl">% Atingido — Mínima</div><div class="kpi-val" id="k-amin">—</div><div class="kpi-sub">meta mínima do mês</div></div>
     <div class="kpi b"><div class="kpi-lbl">% Atingido — Desejável</div><div class="kpi-val" id="k-ades">—</div><div class="kpi-sub">meta desejável do mês</div></div>
-    <div class="kpi r"><div class="kpi-lbl">Falta (Mínima)</div><div class="kpi-val" id="k-fmin">—</div><div class="kpi-sub">para bater a meta mínima</div></div>
-    <div class="kpi r"><div class="kpi-lbl">Falta (Desejável)</div><div class="kpi-val" id="k-fdes">—</div><div class="kpi-sub">para bater a meta desejável</div></div>
+    <div class="kpi r" id="card-fmin"><div class="kpi-lbl">Falta p/ mínima acumulada</div><div class="kpi-val" id="k-fmin">—</div><div class="kpi-sub">jan até mês atual — meta em %</div></div>
+    <div class="kpi r" id="card-fdes"><div class="kpi-lbl">Falta p/ desejável acumulada</div><div class="kpi-val" id="k-fdes">—</div><div class="kpi-sub">jan até mês atual — meta em %</div></div>
     <div class="kpi y"><div class="kpi-lbl">Negociações — Mês</div><div class="kpi-val" id="k-qtd">—</div><div class="kpi-sub" id="k-qtd-sub">vendas fechadas</div></div>
   </div>
 
@@ -291,13 +291,16 @@ async function fetchDealsRD() {
       if (f?.value) tipo = f.value;
     }
     return {
-      n: d.name || '',
-      e: d.organization?.name || '',
+      id: d.id || d._id || d.uuid || d.deal_id || d.Reserva || d.reserva || d.name || '',
+      n: d.name || d.Negocio || d.Negócio || d.Reserva || d.reserva || '',
+      e: d.organization?.name || d.Cliente || d.cliente || '',
       s: estado,
       v: String(valor),
       d: dt,
-      r: d.user?.name || '',
-      t: tipo
+      r: d.user?.name || d.Vendedor || d.vendedor || '',
+      t: tipo,
+      closedRaw: d.closed_at || d.DataVenda || d.dataVenda || d.data_venda || '',
+      updatedRaw: d.updated_at || d.Modificado || d.modificado || d.updatedAt || ''
     };
   });
   return normalized;
@@ -352,6 +355,30 @@ const pct=(v,t)=>t?Math.round(v/t*1000)/10:0;
 const fP=v=>v.toFixed(1)+'%';
 const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 const fDtShort=s=>{if(!s)return'—';const[y,m,d]=s.split('-');return`${d}/${m}`;};
+const alertTime=d=>{
+  const raw=d.closedRaw||d.updatedRaw||d.d||'';
+  const dt=new Date(String(raw).replace(' ','T'));
+  if(!isNaN(dt)) return dt.getTime();
+  if(d.d){
+    const fallback=new Date(d.d+'T12:00:00');
+    if(!isNaN(fallback)) return fallback.getTime();
+  }
+  return 0;
+};
+const alertKey=d=>[d.id,d.n,d.r,d.v,d.d,d.closedRaw||d.updatedRaw].map(x=>String(x||'').trim()).join('::');
+const setKpiStatus=(cardId, valueId, saldoPct)=>{
+  const card=document.getElementById(cardId);
+  const val=document.getElementById(valueId);
+  if(!card||!val) return;
+  card.classList.remove('g','r','b','y');
+  if(saldoPct>=0){
+    card.classList.add('g');
+    val.textContent='+'+fP(saldoPct);
+  }else{
+    card.classList.add('r');
+    val.textContent=fP(Math.abs(saldoPct));
+  }
+};
 
 // ── ÁUDIO (crianças comemorando) ──
 let audioEl=null;
@@ -515,13 +542,15 @@ function render(){
   }
   const pAcumMin=pct(fatAcum,metaMinAcum);
   const pAcumDes=pct(fatAcum,metaDesAcum);
-  const pFmin=Math.max(0,100-pAcumMin);
-  const pFdes=Math.max(0,100-pAcumDes);
+  // Saldo acumulado do período em percentual:
+  // negativo = falta para a meta; positivo = passou da meta acumulada.
+  const saldoMinAcum=pAcumMin-100;
+  const saldoDesAcum=pAcumDes-100;
 
   document.getElementById('k-amin').textContent=fP(pAmin);
   document.getElementById('k-ades').textContent=fP(pAdes);
-  document.getElementById('k-fmin').textContent=fP(pFmin);
-  document.getElementById('k-fdes').textContent=fP(pFdes);
+  setKpiStatus('card-fmin','k-fmin',saldoMinAcum);
+  setKpiStatus('card-fdes','k-fdes',saldoDesAcum);
 
   // Vendas do mês via data de fechamento (coluna T = campo "d")
   const vMes=DEALS_DATA.filter(d=>{
@@ -535,7 +564,7 @@ function render(){
   // Donut
   document.getElementById('d-pct').textContent=fP(pAdes);
   document.getElementById('l-real').textContent=fP(pAdes);
-  document.getElementById('l-falta').textContent=fP(Math.max(0,pFdes));
+  document.getElementById('l-falta').textContent=fP(Math.max(0,100-pAdes));
   document.getElementById('l-min').textContent=fP(pAmin);
   const c1=document.getElementById('donut').getContext('2d');
   if(cDonut)cDonut.destroy();
@@ -683,31 +712,31 @@ async function init() {
     render();
 
     // Verifica novas vendas para alerta
-    // Chave = nome + closed_at (data/hora exata do fechamento)
-    // Ordena por closed_at para respeitar a ordem cronológica
-    const vendasFechadas = DEALS_DATA
+    // Regra: considerar somente vendas com status Vendida, na janela das últimas 6.
+    // Se uma negociação virar Vendida, ela entra nessa janela e dispara alerta.
+    // A exibição dos alertas acontece da mais antiga para a mais nova.
+    const ultimas6Vendidas = DEALS_DATA
       .filter(d => d.s === 'Vendida' && d.n && d.d)
-      .sort((a,b) => a.d.localeCompare(b.d)); // ordem crescente por data
+      .sort((a,b) => alertTime(b) - alertTime(a))
+      .slice(0,6)
+      .sort((a,b) => alertTime(a) - alertTime(b));
 
-    // Cada venda tem chave única: nome + data fechamento
-    const chaveAtual = vendasFechadas.map(d => d.n + '::' + d.d).join('|');
-    const chaveAnterior = localStorage.getItem('vendasChaves') || '';
+    const chavesAtuais = ultimas6Vendidas.map(alertKey);
+    const chaveAtual = chavesAtuais.join('|');
+    const chaveAnterior = localStorage.getItem('vendasChavesUltimas6') || '';
 
     if (chaveAnterior && chaveAnterior !== chaveAtual) {
-      const setAnterior = new Set(chaveAnterior.split('|'));
-      // Novas = fechamento que não existia antes
-      const novas = vendasFechadas.filter(d => !setAnterior.has(d.n + '::' + d.d));
-      // Ordena por closed_at para alertar na ordem correta
-      novas.sort((a,b) => a.d.localeCompare(b.d));
-      // Limita a 3 alertas por vez para não sobrecarregar
-      const novasLimitadas = novas.slice(-5); // pega as 5 mais recentes
-      novasLimitadas.forEach((venda, i) => {
+      const setAnterior = new Set(chaveAnterior.split('|').filter(Boolean));
+      const novas = ultimas6Vendidas.filter(d => !setAnterior.has(alertKey(d)));
+
+      novas.slice(0,6).forEach((venda, i) => {
         setTimeout(() => {
           mostrarAlerta(venda.n, venda.e, venda.r);
         }, i * 9000);
       });
     }
-    localStorage.setItem('vendasChaves', chaveAtual);
+    localStorage.setItem('vendasChavesUltimas6', chaveAtual);
+    localStorage.removeItem('vendasChaves');
 
     document.getElementById('tb-upd').textContent =
       'Atualizado às ' + new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
@@ -719,8 +748,8 @@ async function init() {
 }
 
 window.addEventListener('DOMContentLoaded', init);
-// Auto-refresh a cada 3 minutos
-setInterval(init, 3 * 60 * 1000);
+// Auto-refresh a cada 5 minutos
+setInterval(init, 5 * 60 * 1000);
 
 </script>
 </body>
