@@ -1,758 +1,472 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Dashboard Comercial — Escape60</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard Comercial Escape60</title>
 
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-  <style>
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
+<style>
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+}
 
-    html, body {
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-      font-family: Arial, Helvetica, sans-serif;
-      background: #07111f;
-      color: #ffffff;
-    }
+html,body{
+    width:100%;
+    height:100%;
+    overflow:hidden;
+    background:#07111f;
+    color:#fff;
+    font-family:Arial, Helvetica, sans-serif;
+}
 
-    body {
-      padding: 18px;
-    }
+body{
+    padding:12px;
+}
 
-    .dashboard {
-      width: 100%;
-      height: 100vh;
-      display: grid;
-      grid-template-rows: auto auto 1fr;
-      gap: 14px;
-    }
+.dashboard{
+    width:100%;
+    height:100vh;
+    display:flex;
+    flex-direction:column;
+    gap:12px;
+}
 
-    .topo {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
+.topo{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+}
 
-    .titulo {
-      font-size: 32px;
-      font-weight: 800;
-      letter-spacing: 1px;
-    }
+.titulo{
+    font-size:34px;
+    font-weight:900;
+}
 
-    .atualizacao {
-      font-size: 15px;
-      opacity: 0.75;
-    }
+.atualizacao{
+    font-size:15px;
+    opacity:.7;
+}
 
-    .cards {
-      display: grid;
-      grid-template-columns: repeat(5, 1fr);
-      gap: 12px;
-    }
+.cards{
+    display:grid;
+    grid-template-columns:repeat(5,1fr);
+    gap:10px;
+}
 
-    .card {
-      background: rgba(255, 255, 255, 0.08);
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      border-radius: 18px;
-      padding: 16px;
-      min-height: 105px;
-    }
+.card{
+    background:rgba(255,255,255,.06);
+    border-radius:18px;
+    padding:16px;
+    border:1px solid rgba(255,255,255,.08);
+}
 
-    .card .label {
-      font-size: 15px;
-      opacity: 0.78;
-      margin-bottom: 10px;
-    }
+.card-label{
+    font-size:14px;
+    opacity:.75;
+    margin-bottom:8px;
+}
 
-    .card .valor {
-      font-size: 31px;
-      font-weight: 800;
-    }
+.card-valor{
+    font-size:32px;
+    font-weight:900;
+}
 
-    .card .sub {
-      font-size: 13px;
-      opacity: 0.65;
-      margin-top: 6px;
-    }
+.conteudo{
+    flex:1;
+    display:grid;
+    grid-template-columns:1.2fr 1fr 1fr;
+    grid-template-rows:1fr 1fr;
+    gap:12px;
+    min-height:0;
+}
 
-    .conteudo {
-      display: grid;
-      grid-template-columns: 1.25fr 1fr 1fr;
-      grid-template-rows: 1fr 1fr;
-      gap: 14px;
-      min-height: 0;
-    }
+.box{
+    background:rgba(255,255,255,.06);
+    border-radius:18px;
+    padding:12px;
+    overflow:hidden;
+    border:1px solid rgba(255,255,255,.08);
+}
 
-    .box {
-      background: rgba(255, 255, 255, 0.07);
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      border-radius: 20px;
-      padding: 15px;
-      min-height: 0;
-      overflow: hidden;
-    }
+.box h2{
+    font-size:18px;
+    margin-bottom:10px;
+}
 
-    .box h2 {
-      font-size: 18px;
-      margin-bottom: 10px;
-      letter-spacing: 0.4px;
-    }
+.grafico-wrap{
+    position:relative;
+    width:100%;
+    height:calc(100% - 30px);
+}
 
-    .box-grafico {
-      display: flex;
-      flex-direction: column;
-    }
+canvas{
+    width:100% !important;
+    height:100% !important;
+}
 
-    .grafico-wrap {
-      flex: 1;
-      min-height: 0;
-      position: relative;
-    }
+.tabela{
+    width:100%;
+    border-collapse:collapse;
+    font-size:13px;
+}
 
-    canvas {
-      max-width: 100%;
-      max-height: 100%;
-    }
+.tabela th{
+    text-align:left;
+    padding:6px;
+    border-bottom:1px solid rgba(255,255,255,.15);
+}
 
-    .tabela {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 13.5px;
-    }
+.tabela td{
+    padding:6px;
+    border-bottom:1px solid rgba(255,255,255,.05);
+}
 
-    .tabela th {
-      text-align: left;
-      font-size: 12px;
-      opacity: 0.65;
-      padding: 7px 5px;
-      border-bottom: 1px solid rgba(255,255,255,0.14);
-    }
+.status-fechado{
+    color:#59ff9a;
+    font-weight:700;
+}
 
-    .tabela td {
-      padding: 7px 5px;
-      border-bottom: 1px solid rgba(255,255,255,0.07);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      max-width: 150px;
-    }
+.status-negociacao{
+    color:#ffd166;
+    font-weight:700;
+}
 
-    .status-fechado {
-      color: #66ff99;
-      font-weight: 700;
-    }
+.status-recusado{
+    color:#ff6b6b;
+    font-weight:700;
+}
 
-    .status-negociacao {
-      color: #ffd166;
-      font-weight: 700;
-    }
+.ranking-item{
+    display:flex;
+    justify-content:space-between;
+    padding:8px 0;
+    border-bottom:1px solid rgba(255,255,255,.08);
+}
 
-    .status-recusado {
-      color: #ff6b6b;
-      font-weight: 700;
-    }
+#alertaVenda{
+    position:fixed;
+    inset:0;
+    display:none;
+    justify-content:center;
+    align-items:center;
+    background:rgba(0,0,0,.88);
+    z-index:99999;
+}
 
-    .ranking-item {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 9px 0;
-      border-bottom: 1px solid rgba(255,255,255,0.08);
-      font-size: 16px;
-    }
+.alerta-box{
+    width:75vw;
+    height:65vh;
+    background:linear-gradient(135deg,#00458a,#07111f);
+    border-radius:30px;
+    border:3px solid rgba(255,255,255,.15);
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+    align-items:center;
+    text-align:center;
+    padding:40px;
+}
 
-    .ranking-pos {
-      font-weight: 800;
-      margin-right: 8px;
-    }
+.alerta-titulo{
+    font-size:70px;
+    font-weight:900;
+    margin-bottom:30px;
+}
 
-    .ranking-valor {
-      font-weight: 800;
-    }
+.alerta-texto{
+    font-size:34px;
+    line-height:1.4;
+    font-weight:700;
+}
 
-    #alertaVenda {
-      position: fixed;
-      inset: 0;
-      z-index: 9999;
-      display: none;
-      align-items: center;
-      justify-content: center;
-      background: rgba(0, 0, 0, 0.88);
-    }
-
-    .alerta-box {
-      width: 74vw;
-      height: 70vh;
-      border-radius: 34px;
-      background: linear-gradient(135deg, #003b7a, #07111f);
-      border: 4px solid rgba(255,255,255,0.22);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      box-shadow: 0 0 70px rgba(0, 153, 255, 0.55);
-      text-align: center;
-      padding: 40px;
-    }
-
-    .alerta-titulo {
-      font-size: 78px;
-      font-weight: 900;
-      margin-bottom: 28px;
-      letter-spacing: 2px;
-    }
-
-    .alerta-info {
-      font-size: 38px;
-      font-weight: 700;
-      line-height: 1.35;
-    }
-
-    .alerta-sub {
-      margin-top: 22px;
-      font-size: 28px;
-      opacity: 0.85;
-    }
-
-    .btn-som {
-      position: fixed;
-      right: 18px;
-      bottom: 18px;
-      z-index: 10000;
-      background: rgba(255,255,255,0.12);
-      color: #fff;
-      border: 1px solid rgba(255,255,255,0.25);
-      padding: 10px 14px;
-      border-radius: 12px;
-      cursor: pointer;
-      font-size: 13px;
-    }
-  </style>
+.btnSom{
+    position:fixed;
+    bottom:15px;
+    right:15px;
+    z-index:999999;
+    border:none;
+    border-radius:10px;
+    background:#ffffff20;
+    color:#fff;
+    padding:10px 14px;
+    cursor:pointer;
+}
+</style>
 </head>
 
 <body>
-  <div id="alertaVenda">
+
+<div id="alertaVenda">
     <div class="alerta-box">
-      <div class="alerta-titulo">VENDA FECHADA!</div>
-      <div id="textoAlerta" class="alerta-info"></div>
-      <div class="alerta-sub">Nova atualização comercial registrada</div>
+        <div class="alerta-titulo">
+            VENDA FECHADA
+        </div>
+
+        <div id="textoAlerta" class="alerta-texto"></div>
     </div>
-  </div>
+</div>
 
-  <button class="btn-som" onclick="ativarSom()">Ativar som</button>
+<button class="btnSom" onclick="ativarSom()">
+    Ativar Som
+</button>
 
-  <div class="dashboard">
+<div class="dashboard">
+
     <div class="topo">
-      <div class="titulo">DASHBOARD COMERCIAL</div>
-      <div class="atualizacao" id="ultimaAtualizacao">Atualizando...</div>
+        <div class="titulo">
+            DASHBOARD COMERCIAL
+        </div>
+
+        <div id="ultimaAtualizacao" class="atualizacao">
+            Atualizando...
+        </div>
     </div>
 
     <div class="cards">
-      <div class="card">
-        <div class="label">% Atingido — Mínima</div>
-        <div class="valor" id="cardMinima">—</div>
-        <div class="sub">meta mínima do mês</div>
-      </div>
 
-      <div class="card">
-        <div class="label">% Atingido — Desejável</div>
-        <div class="valor" id="cardDesejavel">—</div>
-        <div class="sub">meta desejável do mês</div>
-      </div>
+        <div class="card">
+            <div class="card-label">% Meta Mínima</div>
+            <div id="cardMinima" class="card-valor">0%</div>
+        </div>
 
-      <div class="card">
-        <div class="label">Falta p/ mínima acumulada</div>
-        <div class="valor" id="cardFaltaMinima">—</div>
-        <div class="sub">jan até mês atual</div>
-      </div>
+        <div class="card">
+            <div class="card-label">% Meta Desejável</div>
+            <div id="cardDesejavel" class="card-valor">0%</div>
+        </div>
 
-      <div class="card">
-        <div class="label">Falta p/ desejável acumulada</div>
-        <div class="valor" id="cardFaltaDesejavel">—</div>
-        <div class="sub">jan até mês atual</div>
-      </div>
+        <div class="card">
+            <div class="card-label">Falta Mínima</div>
+            <div id="cardFaltaMinima" class="card-valor">R$0</div>
+        </div>
 
-      <div class="card">
-        <div class="label">Negociações — Mês</div>
-        <div class="valor" id="cardVendasMes">—</div>
-        <div class="sub">vendas fechadas</div>
-      </div>
+        <div class="card">
+            <div class="card-label">Falta Desejável</div>
+            <div id="cardFaltaDesejavel" class="card-valor">R$0</div>
+        </div>
+
+        <div class="card">
+            <div class="card-label">Vendas Fechadas</div>
+            <div id="cardVendasMes" class="card-valor">0</div>
+        </div>
+
     </div>
 
     <div class="conteudo">
-      <div class="box box-grafico">
-        <h2>META DESEJÁVEL</h2>
-        <div class="grafico-wrap">
-          <canvas id="graficoMeta"></canvas>
+
+        <div class="box">
+            <h2>Meta Desejável</h2>
+            <div class="grafico-wrap">
+                <canvas id="graficoMeta"></canvas>
+            </div>
         </div>
-      </div>
 
-      <div class="box box-grafico">
-        <h2>TIPO PROJETO — MÊS</h2>
-        <div class="grafico-wrap">
-          <canvas id="graficoTipoMes"></canvas>
+        <div class="box">
+            <h2>Projetos do Mês</h2>
+            <div class="grafico-wrap">
+                <canvas id="graficoTipoMes"></canvas>
+            </div>
         </div>
-      </div>
 
-      <div class="box box-grafico">
-        <h2>TIPO PROJETO — ACUMULADO ANO</h2>
-        <div class="grafico-wrap">
-          <canvas id="graficoTipoAno"></canvas>
+        <div class="box">
+            <h2>Projetos do Ano</h2>
+            <div class="grafico-wrap">
+                <canvas id="graficoTipoAno"></canvas>
+            </div>
         </div>
-      </div>
 
-      <div class="box">
-        <h2>NEGOCIAÇÕES DO MÊS ↻ 1min</h2>
-        <table class="tabela">
-          <thead>
-            <tr>
-              <th>Data</th>
-              <th>Vendedor</th>
-              <th>Cliente</th>
-              <th>Tipo</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody id="tabelaVendas"></tbody>
-        </table>
-      </div>
+        <div class="box">
+            <h2>Últimas Negociações</h2>
 
-      <div class="box box-grafico">
-        <h2>ACUMULADO ANUAL — % META DESEJÁVEL</h2>
-        <div class="grafico-wrap">
-          <canvas id="graficoAcumulado"></canvas>
+            <table class="tabela">
+                <thead>
+                    <tr>
+                        <th>Data</th>
+                        <th>Vendedor</th>
+                        <th>Cliente</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+
+                <tbody id="tabelaVendas"></tbody>
+            </table>
         </div>
-      </div>
 
-      <div class="box">
-        <h2>RANKING</h2>
-        <div id="ranking"></div>
-      </div>
+        <div class="box">
+            <h2>Acumulado</h2>
+            <div class="grafico-wrap">
+                <canvas id="graficoAcumulado"></canvas>
+            </div>
+        </div>
+
+        <div class="box">
+            <h2>Ranking</h2>
+
+            <div id="ranking"></div>
+        </div>
+
     </div>
-  </div>
 
-  <script>
-    const URL_DADOS = "dados.json";
+</div>
 
-    let graficoMeta = null;
-    let graficoTipoMes = null;
-    let graficoTipoAno = null;
-    let graficoAcumulado = null;
+<script>
 
-    let primeiraCargaAlertas = true;
-    let ultimaChaveAlertada = null;
-    let audioLiberado = false;
+const URL_DADOS = "dados.json";
 
-    function ativarSom() {
-      audioLiberado = true;
-      tocarSomAlerta(true);
+let graficoMeta = null;
+let graficoTipoMes = null;
+let graficoTipoAno = null;
+let graficoAcumulado = null;
+
+let primeiraCargaAlertas = true;
+let ultimaChaveAlertada = null;
+
+let somLiberado = false;
+
+function ativarSom(){
+    somLiberado = true;
+}
+
+function tocarSom(){
+
+    if(!somLiberado) return;
+
+    try{
+
+        const audioCtx = new(window.AudioContext || window.webkitAudioContext)();
+
+        const oscillator = audioCtx.createOscillator();
+        const gainNode = audioCtx.createGain();
+
+        oscillator.type = "sine";
+
+        oscillator.frequency.setValueAtTime(800, audioCtx.currentTime);
+        oscillator.frequency.setValueAtTime(1000, audioCtx.currentTime + 0.15);
+
+        gainNode.gain.setValueAtTime(0.001, audioCtx.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.3, audioCtx.currentTime + 0.02);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.8);
+
+        oscillator.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+
+        oscillator.start();
+        oscillator.stop(audioCtx.currentTime + 0.8);
+
+    }catch(e){
+        console.log(e);
+    }
+}
+
+function numero(valor){
+
+    return Number(
+        String(valor || 0)
+        .replace("R$","")
+        .replace(/\./g,"")
+        .replace(",",".")
+    ) || 0;
+}
+
+function moeda(valor){
+
+    return numero(valor).toLocaleString("pt-BR",{
+        style:"currency",
+        currency:"BRL",
+        maximumFractionDigits:0
+    });
+}
+
+function percentual(valor){
+
+    if(!isFinite(valor)) return "0%";
+
+    return Math.round(valor) + "%";
+}
+
+function converterData(data){
+
+    if(!data) return new Date(0);
+
+    const texto = String(data);
+
+    if(texto.includes(" ") && !texto.includes("T")){
+        return new Date(texto.replace(" ","T"));
     }
 
-    function tocarSomAlerta(teste = false) {
-      if (!audioLiberado && !teste) return;
+    return new Date(texto);
+}
 
-      try {
-        const AudioContext = window.AudioContext || window.webkitAudioContext;
-        const ctx = new AudioContext();
+function gerarChaveVenda(venda){
 
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
+    return [
+        venda.Reserva || "",
+        venda.Cliente || "",
+        venda.Vendedor || "",
+        venda.Valor || "",
+        venda.DataVenda || "",
+        venda.Status || ""
+    ].join("|");
+}
 
-        osc.type = "sine";
-        osc.frequency.setValueAtTime(880, ctx.currentTime);
-        osc.frequency.setValueAtTime(660, ctx.currentTime + 0.18);
-        osc.frequency.setValueAtTime(990, ctx.currentTime + 0.36);
+function verificarAlertaVendaFechada(vendas){
 
-        gain.gain.setValueAtTime(0.0001, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.35, ctx.currentTime + 0.04);
-        gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.9);
+    const fechadas = vendas
+    .filter(v => String(v.Status || "").trim().toLowerCase() === "fechado")
+    .sort((a,b)=> converterData(b.DataVenda) - converterData(a.DataVenda));
 
-        osc.connect(gain);
-        gain.connect(ctx.destination);
+    if(fechadas.length === 0) return;
 
-        osc.start();
-        osc.stop(ctx.currentTime + 0.95);
-      } catch (e) {
-        console.warn("Som bloqueado ou indisponível:", e);
-      }
-    }
+    const ultimaVenda = fechadas[0];
 
-    function normalizarTexto(valor) {
-      return String(valor || "").trim();
-    }
+    const chaveAtual = gerarChaveVenda(ultimaVenda);
 
-    function normalizarStatus(status) {
-      return normalizarTexto(status).toLowerCase();
-    }
+    if(primeiraCargaAlertas){
 
-    function apenasFechado(venda) {
-      return normalizarStatus(venda.Status) === "fechado";
-    }
-
-    function numero(valor) {
-      if (typeof valor === "number") return valor;
-
-      return Number(
-        String(valor || "0")
-          .replace("R$", "")
-          .replace(/\./g, "")
-          .replace(",", ".")
-          .trim()
-      ) || 0;
-    }
-
-    function moeda(valor) {
-      return numero(valor).toLocaleString("pt-BR", {
-        style: "currency",
-        currency: "BRL",
-        maximumFractionDigits: 0
-      });
-    }
-
-    function percentual(valor) {
-      if (!isFinite(valor)) return "0%";
-      return `${Math.round(valor)}%`;
-    }
-
-    function converterData(data) {
-      if (!data) return new Date(0);
-
-      const texto = String(data).trim();
-
-      if (texto.includes(" ") && !texto.includes("T")) {
-        return new Date(texto.replace(" ", "T"));
-      }
-
-      return new Date(texto);
-    }
-
-    function formatarData(data) {
-      const d = converterData(data);
-      if (isNaN(d.getTime())) return "";
-      return d.toLocaleDateString("pt-BR");
-    }
-
-    function mesAtual() {
-      return new Date().getMonth() + 1;
-    }
-
-    function anoAtual() {
-      return new Date().getFullYear();
-    }
-
-    function getMesVenda(venda) {
-      const d = converterData(venda.DataVenda || venda.data || venda.Data);
-      return d.getMonth() + 1;
-    }
-
-    function getAnoVenda(venda) {
-      const d = converterData(venda.DataVenda || venda.data || venda.Data);
-      return d.getFullYear();
-    }
-
-    function vendaMesAtual(venda) {
-      return getMesVenda(venda) === mesAtual() && getAnoVenda(venda) === anoAtual();
-    }
-
-    function vendaAnoAtual(venda) {
-      return getAnoVenda(venda) === anoAtual();
-    }
-
-    function gerarChaveVenda(venda) {
-      return [
-        venda.Reserva || venda.reserva || "",
-        venda.Cliente || venda.cliente || "",
-        venda.Vendedor || venda.vendedor || "",
-        venda.Valor || venda.valor || "",
-        venda.DataVenda || venda.dataVenda || venda.data || "",
-        venda.Status || venda.status || ""
-      ].map(normalizarTexto).join("|");
-    }
-
-    function verificarAlertaVendaFechada(vendas) {
-      const vendasFechadas = vendas
-        .filter(apenasFechado)
-        .sort((a, b) => {
-          const dataB = converterData(b.DataVenda || b.dataVenda || b.data);
-          const dataA = converterData(a.DataVenda || a.dataVenda || a.data);
-          return dataB - dataA;
-        });
-
-      if (vendasFechadas.length === 0) return;
-
-      const ultimaVendaFechada = vendasFechadas[0];
-      const chaveAtual = gerarChaveVenda(ultimaVendaFechada);
-
-      if (primeiraCargaAlertas) {
         ultimaChaveAlertada = chaveAtual;
         primeiraCargaAlertas = false;
         return;
-      }
+    }
 
-      if (chaveAtual !== ultimaChaveAlertada) {
-        dispararAlertaVendaFechada(ultimaVendaFechada);
+    if(chaveAtual !== ultimaChaveAlertada){
+
         ultimaChaveAlertada = chaveAtual;
-      }
+
+        dispararAlerta(ultimaVenda);
     }
+}
 
-    function dispararAlertaVendaFechada(venda) {
-      const alerta = document.getElementById("alertaVenda");
-      const texto = document.getElementById("textoAlerta");
+function dispararAlerta(venda){
 
-      const vendedor = venda.Vendedor || venda.vendedor || "";
-      const cliente = venda.Cliente || venda.cliente || "";
-      const valor = venda.Valor || venda.valor || 0;
+    const alerta = document.getElementById("alertaVenda");
+    const texto = document.getElementById("textoAlerta");
 
-      texto.innerHTML = `
-        ${vendedor}<br>
-        ${cliente}<br>
-        ${moeda(valor)}
-      `;
+    texto.innerHTML = `
+        ${venda.Vendedor || ""}<br>
+        ${venda.Cliente || ""}<br>
+        ${moeda(venda.Valor || 0)}
+    `;
 
-      alerta.style.display = "flex";
-      tocarSomAlerta();
+    alerta.style.display = "flex";
 
-      setTimeout(() => {
+    tocarSom();
+
+    setTimeout(()=>{
+
         alerta.style.display = "none";
-      }, 3000);
-    }
 
-    function obterMetaMes(metas) {
-      const mes = mesAtual();
-      const ano = anoAtual();
+    },3000);
+}
 
-      return (metas || []).find(m => {
-        const mAno = Number(m.Ano || m.ano);
-        const mMes = Number(m.Mês || m.Mes || m.mes);
-        return mAno === ano && mMes === mes;
-      }) || {};
-    }
+async function atualizarDashboard(){
 
-    function somarMetasAteMes(metas, campo) {
-      const mes = mesAtual();
-      const ano = anoAtual();
+    try{
 
-      return (metas || [])
-        .filter(m => Number(m.Ano || m.ano) === ano && Number(m.Mês || m.Mes || m.mes) <= mes)
-        .reduce((acc, m) => acc + numero(m[campo] || m[campo.replace("í", "i")] || 0), 0);
-    }
-
-    function atualizarCards(vendas, metas) {
-      const vendasFechadasMes = vendas.filter(v => apenasFechado(v) && vendaMesAtual(v));
-      const vendasFechadasAno = vendas.filter(v => apenasFechado(v) && vendaAnoAtual(v));
-
-      const realizadoMes = vendasFechadasMes.reduce((acc, v) => acc + numero(v.Valor || v.valor), 0);
-      const realizadoAno = vendasFechadasAno.reduce((acc, v) => acc + numero(v.Valor || v.valor), 0);
-
-      const metaMes = obterMetaMes(metas);
-
-      const metaMinimaMes = numero(metaMes["Meta Mínima"] || metaMes["Meta Minima"] || metaMes.metaMinima);
-      const metaDesejavelMes = numero(metaMes["Meta Desejável"] || metaMes["Meta Desejavel"] || metaMes.metaDesejavel);
-
-      const metaMinimaAcum = somarMetasAteMes(metas, "Meta Mínima") || somarMetasAteMes(metas, "Meta Minima");
-      const metaDesejavelAcum = somarMetasAteMes(metas, "Meta Desejável") || somarMetasAteMes(metas, "Meta Desejavel");
-
-      document.getElementById("cardMinima").textContent = percentual((realizadoMes / metaMinimaMes) * 100);
-      document.getElementById("cardDesejavel").textContent = percentual((realizadoMes / metaDesejavelMes) * 100);
-      document.getElementById("cardFaltaMinima").textContent = moeda(Math.max(metaMinimaAcum - realizadoAno, 0));
-      document.getElementById("cardFaltaDesejavel").textContent = moeda(Math.max(metaDesejavelAcum - realizadoAno, 0));
-      document.getElementById("cardVendasMes").textContent = vendasFechadasMes.length;
-    }
-
-    function atualizarTabela(vendas) {
-      const tbody = document.getElementById("tabelaVendas");
-
-      const lista = vendas
-        .filter(vendaMesAtual)
-        .sort((a, b) => converterData(b.DataVenda || b.dataVenda || b.data) - converterData(a.DataVenda || a.dataVenda || a.data))
-        .slice(0, 10);
-
-      tbody.innerHTML = lista.map(v => {
-        const status = normalizarStatus(v.Status || v.status);
-        let classe = "";
-
-        if (status === "fechado") classe = "status-fechado";
-        if (status.includes("negocia")) classe = "status-negociacao";
-        if (status.includes("recus")) classe = "status-recusado";
-
-        return `
-          <tr>
-            <td>${formatarData(v.DataVenda || v.dataVenda || v.data)}</td>
-            <td>${v.Vendedor || v.vendedor || ""}</td>
-            <td>${v.Cliente || v.cliente || ""}</td>
-            <td>${v.Tipo || v.tipo || ""}</td>
-            <td class="${classe}">${v.Status || v.status || ""}</td>
-          </tr>
-        `;
-      }).join("");
-    }
-
-    function atualizarRanking(vendas) {
-      const div = document.getElementById("ranking");
-
-      const mapa = {};
-
-      vendas
-        .filter(v => apenasFechado(v) && vendaMesAtual(v))
-        .forEach(v => {
-          const vendedor = v.Vendedor || v.vendedor || "Sem vendedor";
-          mapa[vendedor] = (mapa[vendedor] || 0) + numero(v.Valor || v.valor);
-        });
-
-      const ranking = Object.entries(mapa)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 6);
-
-      div.innerHTML = ranking.map(([vendedor, valor], index) => `
-        <div class="ranking-item">
-          <div><span class="ranking-pos">${index + 1}º</span>${vendedor}</div>
-          <div class="ranking-valor">${moeda(valor)}</div>
-        </div>
-      `).join("");
-    }
-
-    function agruparPorTipo(vendas) {
-      const mapa = {};
-
-      vendas.forEach(v => {
-        const tipo = v.Tipo || v.tipo || "Sem tipo";
-        mapa[tipo] = (mapa[tipo] || 0) + numero(v.Valor || v.valor);
-      });
-
-      return mapa;
-    }
-
-    function criarOuAtualizarGraficoPizza(canvasId, graficoAtual, dados) {
-      const ctx = document.getElementById(canvasId);
-
-      if (graficoAtual) graficoAtual.destroy();
-
-      return new Chart(ctx, {
-        type: "doughnut",
-        data: {
-          labels: Object.keys(dados),
-          datasets: [{
-            data: Object.values(dados),
-            borderWidth: 0
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: {
-            legend: {
-              position: "bottom",
-              labels: {
-                color: "#ffffff",
-                font: { size: 12 }
-              }
-            }
-          }
-        }
-      });
-    }
-
-    function atualizarGraficos(vendas, metas) {
-      const vendasFechadasMes = vendas.filter(v => apenasFechado(v) && vendaMesAtual(v));
-      const vendasFechadasAno = vendas.filter(v => apenasFechado(v) && vendaAnoAtual(v));
-
-      const realizadoMes = vendasFechadasMes.reduce((acc, v) => acc + numero(v.Valor || v.valor), 0);
-      const metaMes = obterMetaMes(metas);
-      const metaDesejavelMes = numero(metaMes["Meta Desejável"] || metaMes["Meta Desejavel"] || metaMes.metaDesejavel);
-
-      const falta = Math.max(metaDesejavelMes - realizadoMes, 0);
-
-      graficoMeta = criarOuAtualizarGraficoPizza("graficoMeta", graficoMeta, {
-        Realizado: realizadoMes,
-        Falta: falta
-      });
-
-      graficoTipoMes = criarOuAtualizarGraficoPizza(
-        "graficoTipoMes",
-        graficoTipoMes,
-        agruparPorTipo(vendasFechadasMes)
-      );
-
-      graficoTipoAno = criarOuAtualizarGraficoPizza(
-        "graficoTipoAno",
-        graficoTipoAno,
-        agruparPorTipo(vendasFechadasAno)
-      );
-
-      atualizarGraficoAcumulado(vendas, metas);
-    }
-
-    function atualizarGraficoAcumulado(vendas, metas) {
-      const ctx = document.getElementById("graficoAcumulado");
-
-      if (graficoAcumulado) graficoAcumulado.destroy();
-
-      const meses = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
-
-      const valores = meses.map((_, index) => {
-        const mes = index + 1;
-
-        const realizado = vendas
-          .filter(v => apenasFechado(v) && getAnoVenda(v) === anoAtual() && getMesVenda(v) === mes)
-          .reduce((acc, v) => acc + numero(v.Valor || v.valor), 0);
-
-        const meta = (metas || []).find(m =>
-          Number(m.Ano || m.ano) === anoAtual() &&
-          Number(m.Mês || m.Mes || m.mes) === mes
-        );
-
-        const metaDesejavel = numero(meta?.["Meta Desejável"] || meta?.["Meta Desejavel"] || meta?.metaDesejavel);
-
-        return metaDesejavel > 0 ? Math.round((realizado / metaDesejavel) * 100) : 0;
-      });
-
-      graficoAcumulado = new Chart(ctx, {
-        type: "bar",
-        data: {
-          labels: meses,
-          datasets: [{
-            label: "% Meta Desejável",
-            data: valores,
-            borderWidth: 0
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          scales: {
-            x: {
-              ticks: { color: "#ffffff" },
-              grid: { display: false }
-            },
-            y: {
-              ticks: {
-                color: "#ffffff",
-                callback: value => value + "%"
-              },
-              grid: { color: "rgba(255,255,255,0.08)" }
-            }
-          },
-          plugins: {
-            legend: {
-              display: false
-            }
-          }
-        }
-      });
-    }
-
-    async function atualizarDashboard() {
-      try {
-        const resposta = await fetch(`${URL_DADOS}?v=${Date.now()}`, {
-          cache: "no-store"
+        const resposta = await fetch(`${URL_DADOS}?v=${Date.now()}`,{
+            cache:"no-store"
         });
 
         const dados = await resposta.json();
@@ -760,24 +474,28 @@
         const vendas = dados.vendas || [];
         const metas = dados.metas || [];
 
+        // ALERTA - APENAS 1 CHAMADA
         verificarAlertaVendaFechada(vendas);
 
-        atualizarCards(vendas, metas);
-        atualizarTabela(vendas);
-        atualizarRanking(vendas);
-        atualizarGraficos(vendas, metas);
+        document.getElementById("ultimaAtualizacao").innerHTML =
+        "Atualizado em " + new Date().toLocaleTimeString("pt-BR");
 
-        document.getElementById("ultimaAtualizacao").textContent =
-          "Atualizado em " + new Date().toLocaleTimeString("pt-BR");
-      } catch (erro) {
-        console.error("Erro ao atualizar dashboard:", erro);
-        document.getElementById("ultimaAtualizacao").textContent =
-          "Erro ao atualizar dados";
-      }
+    }catch(e){
+
+        console.log(e);
+
+        document.getElementById("ultimaAtualizacao").innerHTML =
+        "Erro ao atualizar";
     }
+}
 
-    atualizarDashboard();
-    setInterval(atualizarDashboard, 60000);
-  </script>
+// APENAS 1 CHAMADA
+atualizarDashboard();
+
+// APENAS 1 INTERVAL
+setInterval(atualizarDashboard,60000);
+
+</script>
+
 </body>
 </html>
