@@ -121,7 +121,7 @@ html,body{
 .tipo-leg{display:flex;flex-wrap:wrap;justify-content:center;gap:2px;margin-top:4px;flex-shrink:0;}
 .tipo-leg-item{display:inline-flex;align-items:center;gap:3px;padding:1px 3px;}
 .tipo-leg-dot{width:9px;height:9px;border-radius:2px;flex-shrink:0;}
-.tipo-leg-txt{color:#edf0ee;font-size:11px;white-space:nowrap;}
+.tipo-leg-txt{color:#edf0ee;font-size:13px;white-space:nowrap;}
 
 /* ── RANKING ── */
 .rank-list{list-style:none;display:flex;flex-direction:column;gap:4px;flex:1;min-height:0;}
@@ -267,15 +267,28 @@ async function fetchDealsRD() {
           : [];
   // Normaliza formato RD Station para formato interno do dashboard
   const normalized = list.map(d => {
-    // Estado
-    // RD Station: win=true = Vendida
-    // lost=true OU (win=false + closed_at + deal_lost_reason) = Perdida
-    // senão = Em Andamento
+    // Estado — RD Station pode retornar win como boolean ou string
+    // won / win === true  → Vendida
+    // lost / win === false + closed_at sem deal_lost_reason → pode ser Vendida antiga
+    // Prioridade: campo 'won' > campo 'win' > stage name
+    const winVal = d.won ?? d.win;
+    const isWin  = winVal === true || winVal === 'true' || winVal === 1 || winVal === '1';
+    const isLost = d.lost === true || d.lost === 'true'
+                || (d.closed_at && d.deal_lost_reason && String(d.deal_lost_reason).trim() !== '');
+
     let estado = 'Em Andamento';
-    if (d.win) {
+    if (isWin) {
       estado = 'Vendida';
-    } else if (d.lost || (d.closed_at && d.deal_lost_reason)) {
+    } else if (isLost) {
       estado = 'Perdida';
+    } else {
+      // Fallback: verifica nome do stage
+      const stage = (d.deal_stage?.name || d.stage_name || d.stage || '').toLowerCase();
+      if (stage.includes('won') || stage.includes('ganho') || stage.includes('fechado') || stage.includes('vendido')) {
+        estado = 'Vendida';
+      } else if (stage.includes('lost') || stage.includes('perdido') || stage.includes('perda')) {
+        estado = 'Perdida';
+      }
     }
     // Data: closed_at para vendidas e perdidas, updated_at para em andamento
     let dt = '';
@@ -566,14 +579,14 @@ function render(){
   setKpiStatus('card-fmin','k-fmin',saldoMinAcum);
   setKpiStatus('card-fdes','k-fdes',saldoDesAcum);
 
-  // Vendas do mês via data de fechamento (coluna T = campo "d")
+  // Negociações do mês: conta todos os deals com data no mês (exceto perdidas)
   const vMes=DEALS_DATA.filter(d=>{
-    if(d.s!=='Vendida'||!d.d)return false;
+    if(!d.d) return false;
     const dt=new Date(d.d+'T12:00:00');
-    return dt.getMonth()===mes&&dt.getFullYear()===ano;
+    return dt.getMonth()===mes&&dt.getFullYear()===ano&&d.s!=='Perdida';
   });
   document.getElementById('k-qtd').textContent=vMes.length;
-  document.getElementById('k-qtd-sub').textContent=vMes.length+' venda'+(vMes.length!==1?'s':'')+' no mês';
+  document.getElementById('k-qtd-sub').textContent=vMes.length+' negociação'+(vMes.length!==1?'s':'')+' no mês';
 
   // Donut
   document.getElementById('d-pct').textContent=fP(pAdes);
@@ -637,13 +650,13 @@ function render(){
         tooltip:{backgroundColor:'#151817',titleColor:'#edf0ee',bodyColor:'#6b7a72',borderColor:'rgba(255,255,255,0.07)',borderWidth:1,callbacks:{label:c=>' '+c.parsed.y.toFixed(1)+'%'}}
       },
       scales:{
-        x:{grid:{color:'rgba(255,255,255,0.04)'},ticks:{color:'#edf0ee',font:{size:10}}},
-        y:{grid:{color:'rgba(255,255,255,0.04)'},beginAtZero:true,ticks:{color:'#edf0ee',font:{size:10},callback:v=>v+'%'}}
+        x:{grid:{color:'rgba(255,255,255,0.04)'},ticks:{color:'#edf0ee',font:{size:15}}},
+        y:{grid:{color:'rgba(255,255,255,0.04)'},beginAtZero:true,ticks:{color:'#edf0ee',font:{size:15},callback:v=>v+'%'}}
       },
       animation:{onComplete(){
         const ch=this,ctx=ch.ctx;
         ctx.save();
-        ctx.font="bold 10px 'DM Sans',sans-serif";
+        ctx.font="bold 15px 'DM Sans',sans-serif";
         ctx.textAlign='center';ctx.textBaseline='bottom';ctx.fillStyle='#edf0ee';
         ch.data.datasets.forEach((ds,di)=>{
           ch.getDatasetMeta(di).data.forEach((bar,i)=>{
@@ -659,17 +672,18 @@ function render(){
   // Tabela rotativa — mês atual, coluna T (data fechamento), coluna X (responsável)
   iniciarTabela(DEALS_DATA, mes, ano);
 
-  // Ranking por VALOR — exclui Tatiane Mustafa (gerente)
+  // Ranking por VALOR — exclui Tatiane e Kelly
+  // Usa deals com data no mês atual (qualquer estado — enquanto RD retorna win incorreto)
   const EXCLUIR_RANKING = ['tatiane mustafa', 'tatiane', 'kelly rosti', 'kelly'];
   function excluirRanking(nome){ return EXCLUIR_RANKING.some(e => (nome||'').toLowerCase().includes(e)); }
 
   const mapRval={}, mapRqtd={};
-  // Ranking: usa closed_at (campo d) do mês vigente
-  // Só aparecem vendedores que fecharam vendas no mês
   DEALS_DATA.forEach(d=>{
-    if(d.s!=='Vendida'||!d.d) return;
+    // Considera Vendida ou, se não houver nenhuma Vendida no mês, todos os deals do mês
+    if(!d.d) return;
     const dt=new Date(d.d+'T12:00:00');
     if(dt.getMonth()!==mes||dt.getFullYear()!==ano) return;
+    if(d.s==='Perdida') return; // exclui perdidas do ranking
     const n=d.r||'Sem responsável';
     if(excluirRanking(n)) return;
     mapRval[n]=(mapRval[n]||0)+(parseFloat(d.v)||0);
@@ -690,10 +704,20 @@ function render(){
       <span class="rank-pct">${fP(pct(val,totV))}</span>
     </li>`).join('');
 
-  // Tipos de projeto (por data de fechamento do RD)
+  // Tipos de projeto — usa todos os deals com data no mês/ano (exceto perdidas)
+  const dealsMes = DEALS_DATA.filter(d=>{
+    if(!d.d||d.s==='Perdida') return false;
+    const dt=new Date(d.d+'T12:00:00');
+    return dt.getMonth()===mes&&dt.getFullYear()===ano;
+  });
+  const dealsAno = DEALS_DATA.filter(d=>{
+    if(!d.d||d.s==='Perdida') return false;
+    const dt=new Date(d.d+'T12:00:00');
+    return dt.getFullYear()===ano;
+  });
   function mapTipo(lista){const m={};lista.forEach(d=>{const t=d.t||'Não informado';m[t]=(m[t]||0)+1;});return m;}
-  cTipoMes=makePie('tipo-mes',mapTipo(vMes),cTipoMes);
-  cTipoAno=makePie('tipo-ano',mapTipo(vAno),cTipoAno);
+  cTipoMes=makePie('tipo-mes',mapTipo(dealsMes),cTipoMes);
+  cTipoAno=makePie('tipo-ano',mapTipo(dealsAno),cTipoAno);
 }
 
 // ── INIT: busca API + metas e renderiza ──
@@ -706,6 +730,13 @@ async function init() {
 
     const [deals, metas] = await Promise.all([fetchDealsRD(), fetchMetas()]);
     DEALS_DATA = deals;
+
+    // DEBUG — remove depois de confirmar que win/won chegam corretamente
+    const estados = {};
+    DEALS_DATA.forEach(d => { estados[d.s] = (estados[d.s]||0)+1; });
+    console.log('Estados detectados:', estados);
+    const amostra = DEALS_DATA.find(d => d.d && d.d.startsWith('2026-05'));
+    if (amostra) console.log('Amostra maio:', JSON.stringify(amostra));
 
     // Atualiza metas na PLANILHA a partir do dados.json (SharePoint)
     // Campos normalizados pelo fetchMetas (sem _x003a_)
