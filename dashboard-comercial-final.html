@@ -185,7 +185,7 @@ html,body{
     <div class="kpi b"><div class="kpi-lbl">% Atingido — Desejável</div><div class="kpi-val" id="k-ades">—</div><div class="kpi-sub">meta desejável do mês</div></div>
     <div class="kpi r" id="card-fmin"><div class="kpi-lbl">Falta p/ mínima acumulada</div><div class="kpi-val" id="k-fmin">—</div><div class="kpi-sub">jan até mês atual — meta em %</div></div>
     <div class="kpi r" id="card-fdes"><div class="kpi-lbl">Falta p/ desejável acumulada</div><div class="kpi-val" id="k-fdes">—</div><div class="kpi-sub">jan até mês atual — meta em %</div></div>
-    <div class="kpi y"><div class="kpi-lbl">Negociações — Mês</div><div class="kpi-val" id="k-qtd">—</div><div class="kpi-sub" id="k-qtd-sub">vendas fechadas</div></div>
+    <div class="kpi y"><div class="kpi-lbl">Vendas Fechadas — Mês</div><div class="kpi-val" id="k-qtd">—</div><div class="kpi-sub" id="k-qtd-sub">vendas fechadas</div></div>
   </div>
 
   <div class="mid-row">
@@ -244,107 +244,142 @@ html,body{
 // ── CONFIGURAÇÃO ──
 const DADOS_URL = 'https://raw.githubusercontent.com/VBEscape60/dashboard-comercial/main/dados.json';
 const ALERTA_URL = 'https://raw.githubusercontent.com/VBEscape60/dashboard-comercial/main/alerta.json';
+const REFRESH_DADOS_MS = 10 * 60 * 1000;
+const POLLING_ALERTA_MS = 30 * 1000;
+
+// ── JSON robusto: evita quebra total se algum fluxo publicar string JSON ou estrutura antiga ──
+function parseJsonFlex(text) {
+  let raw = JSON.parse(text);
+  if (typeof raw === 'string') raw = JSON.parse(raw);
+  return raw;
+}
+
+function normalizarData(rawDate) {
+  if (!rawDate) return '';
+  const raw = String(rawDate).replace(' ', 'T');
+  const dateObj = new Date(raw);
+  if (isNaN(dateObj)) return '';
+  const y = dateObj.getFullYear();
+  const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+  const d = String(dateObj.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function valorNumero(v) {
+  if (v === null || v === undefined) return 0;
+  if (typeof v === 'number') return isFinite(v) ? v : 0;
+  const str = String(v).trim().replace(/\./g, '').replace(',', '.').replace(/[^0-9.-]/g, '');
+  const n = parseFloat(str);
+  return isFinite(n) ? n : 0;
+}
+
+function nomeNormalizado(nome) {
+  return String(nome || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
 
 // ── BUSCA NEGOCIAÇÕES DO dados.json (gravado pelo Power Automate) ──
 async function fetchDealsRD() {
-  const res = await fetch(DADOS_URL + '?t=' + Date.now());
+  const res = await fetch(DADOS_URL + '?t=' + Date.now(), { cache: 'no-store' });
   if (!res.ok) throw new Error('dados.json HTTP ' + res.status);
-  let raw = await res.json();
-  // Garante que obj seja o objeto real (pode vir como string JSON dentro de string)
-  if (typeof raw === 'string') { try { raw = JSON.parse(raw); } catch(e){} }
-  // Nova estrutura: { rd: { deals:[...] }, metas:[...] }
-  // Estrutura antiga 1: { deals:[...] }
-  // Estrutura antiga 2: array puro [...]
-  let data = raw;
-  const list = Array.isArray(data)
-    ? data
-    : Array.isArray(data.rd)
-      ? data.rd
-      : Array.isArray(data.rd?.deals)
-        ? data.rd.deals
-        : Array.isArray(data.deals)
-          ? data.deals
-          : [];
-  // Normaliza formato RD Station para formato interno do dashboard
-  // O dados.json gravado pelo Power Automate usa a API REST do RD Station:
-  // win: true  → Vendida
-  // win: false + closed_at preenchido → Perdida
-  // win: false + sem closed_at → Em Andamento
-  const normalized = list.map(d => {
-    let estado = 'Em Andamento';
-    const winVal = d.win === true || d.win === 'true' || d.win === 1;
-    const lostVal = d.lost === true || d.lost === 'true';
-    const temFechamento = !!(d.closed_at && String(d.closed_at).trim() !== '' && String(d.closed_at) !== 'null');
+  const text = await res.text();
+  let raw;
+  try {
+    raw = parseJsonFlex(text);
+  } catch (e) {
+    console.error('dados.json inválido. Início recebido:', text.slice(0, 120));
+    throw e;
+  }
 
-    if (winVal) {
-      estado = 'Vendida';
-    } else if (lostVal || (!winVal && temFechamento)) {
-      estado = 'Perdida';
-    } else {
-      estado = 'Em Andamento';
-    }
-    // Data: closed_at para vendidas e perdidas, updated_at para em andamento
-    let dt = '';
-    const rawDate = d.closed_at || (estado === 'Em Andamento' ? d.updated_at : null);
-    if (rawDate) {
-      const raw = (rawDate + '').replace(' ','T');
-      const dateObj = new Date(raw);
-      if (!isNaN(dateObj)) {
-        const y = dateObj.getFullYear();
-        const m = String(dateObj.getMonth()+1).padStart(2,'0');
-        const day = String(dateObj.getDate()).padStart(2,'0');
-        dt = `${y}-${m}-${day}`;
-      }
-    }
-    // Valor — soma deal_products ou usa amount_unique
-    let valor = 0;
-    if (d.deal_products && d.deal_products.length > 0) {
-      valor = d.deal_products.reduce((s,p) => s + (parseFloat(p.total)||0), 0);
-    }
-    if (!valor) valor = parseFloat(d.amount_unique) || parseFloat(d.amount_montly) || 0;
-    // Tipo de Projeto (campo personalizado)
-    let tipo = 'Não informado';
-    if (d.deal_custom_fields) {
-      const f = d.deal_custom_fields.find(c =>
-        (c.custom_field?.label||'').toLowerCase().includes('tipo')
-      );
-      if (f?.value) tipo = f.value;
-    }
-    return {
-      id: d.id || d._id || d.uuid || d.deal_id || d.name || '',
-      n: d.name || '',
-      e: d.organization?.name || d.company?.name || '',
-      s: estado,
-      v: String(valor),
-      d: dt,
-      // responsible.name não existe — campo correto é user.name
-      r: d.user?.name || d.responsible?.name || '',
-      t: tipo,
-      closedRaw: d.closed_at || '',
-      updatedRaw: d.updated_at || ''
-    };
-  });
-  return normalized;
+  // Nova estrutura: { rd: { deals:[...] }, metas:[...] }
+  // Estruturas antigas toleradas: { deals:[...] }, { rd:[...] }, array puro [...]
+  const list = Array.isArray(raw)
+    ? raw
+    : Array.isArray(raw.rd)
+      ? raw.rd
+      : Array.isArray(raw.rd?.deals)
+        ? raw.rd.deals
+        : Array.isArray(raw.deals)
+          ? raw.deals
+          : [];
+
+  return list.map(d => normalizarDealRD(d));
+}
+
+function normalizarDealRD(d) {
+  let estado = 'Em Andamento';
+  const winVal = d.win === true || d.win === 'true' || d.win === 1;
+  const lostVal = d.lost === true || d.lost === 'true' || !!d.deal_lost_reason;
+  const temFechamento = !!(d.closed_at && String(d.closed_at).trim() !== '' && String(d.closed_at) !== 'null');
+
+  if (winVal) {
+    estado = 'Vendida';
+  } else if (lostVal || (!winVal && temFechamento)) {
+    estado = 'Perdida';
+  }
+
+  // Datas oficiais:
+  // d  = data de fechamento (closed_at) → ranking, vendas fechadas, tipo de projeto.
+  // a  = data de abertura/criação (created_at) → tabela das 12 últimas negociações.
+  const dataFechamento = normalizarData(d.closed_at);
+  const dataAbertura   = normalizarData(d.created_at || d.opened_at || d.createdAt);
+  const dataAtualizada  = normalizarData(d.updated_at);
+
+  let valor = 0;
+  if (Array.isArray(d.deal_products) && d.deal_products.length > 0) {
+    valor = d.deal_products.reduce((s, p) => s + valorNumero(p.total), 0);
+  }
+  if (!valor) valor = valorNumero(d.amount_unique || d.amount_total || d.amount_montly || d.value || d.valor);
+
+  let tipo = 'Não informado';
+  if (Array.isArray(d.deal_custom_fields)) {
+    const f = d.deal_custom_fields.find(c =>
+      nomeNormalizado(c.custom_field?.label || '').includes('tipo')
+    );
+    if (f?.value) tipo = f.value;
+  }
+
+  return {
+    id: d.id || d._id || d.uuid || d.deal_id || d.name || '',
+    n: d.name || d.deal_name || '',
+    e: d.organization?.name || d.company?.name || d.cliente || d.client || '',
+    s: estado,
+    v: String(valor),
+    d: dataFechamento,
+    a: dataAbertura,
+    u: dataAtualizada,
+    r: d.user?.name || d.responsible?.name || d.vendedor || d.owner?.name || '',
+    t: tipo,
+    closedRaw: d.closed_at || '',
+    createdRaw: d.created_at || d.opened_at || d.createdAt || '',
+    updatedRaw: d.updated_at || ''
+  };
 }
 
 // ── BUSCA METAS DO dados.json (Power Automate via SharePoint) ──
 async function fetchMetas() {
   try {
-    const res  = await fetch(DADOS_URL + '?t=' + Date.now());
+    const res  = await fetch(DADOS_URL + '?t=' + Date.now(), { cache: 'no-store' });
+    if (!res.ok) throw new Error('dados.json HTTP ' + res.status);
     const text = await res.text();
     let raw;
-    try { const o=JSON.parse(text); raw=typeof o==='string'?JSON.parse(o):o; }
-    catch { raw=JSON.parse(text); }
+    try {
+      raw = parseJsonFlex(text);
+    } catch (e) {
+      console.warn('Metas não carregadas: dados.json inválido. Início recebido:', text.slice(0, 120));
+      return [];
+    }
 
-    // Nova estrutura: { rd: {...}, metas: [...] }
-    // Estrutura antiga: { metas: [...] }
     const arr = Array.isArray(raw?.metas) ? raw.metas : [];
 
     // Normaliza campos com sufixo _x003a_ (Excel Online SharePoint)
     return arr.map(m => {
       const norm = {};
-      Object.entries(m).forEach(([k, v]) => {
-        const clean = k.replace(/_x003a_/gi, '').trim();
+      Object.entries(m || {}).forEach(([k, v]) => {
+        const clean = String(k).replace(/_x003a_/gi, '').trim();
         norm[clean] = v;
       });
       return norm;
@@ -376,17 +411,28 @@ const pct=(v,t)=>t?Math.round(v/t*1000)/10:0;
 const fP=v=>v.toFixed(1)+'%';
 const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 const fDtShort=s=>{if(!s)return'—';const[y,m,d]=s.split('-');return`${d}/${m}`;};
-const alertTime=d=>{
-  const raw=d.closedRaw||d.updatedRaw||d.d||'';
+const dataAberturaTime=d=>{
+  const raw=d.createdRaw||d.a||d.updatedRaw||d.u||d.closedRaw||d.d||'';
   const dt=new Date(String(raw).replace(' ','T'));
   if(!isNaN(dt)) return dt.getTime();
-  if(d.d){
-    const fallback=new Date(d.d+'T12:00:00');
+  if(d.a){
+    const fallback=new Date(d.a+'T12:00:00');
     if(!isNaN(fallback)) return fallback.getTime();
   }
   return 0;
 };
-const alertKey=d=>[d.id,d.n,d.r,d.v,d.d,d.closedRaw||d.updatedRaw].map(x=>String(x||'').trim()).join('::');
+const alertTime=d=>{
+  const raw=d.closedRaw||d.updatedRaw||d.createdRaw||d.d||d.u||d.a||'';
+  const dt=new Date(String(raw).replace(' ','T'));
+  if(!isNaN(dt)) return dt.getTime();
+  const fallbackDate=d.d||d.u||d.a;
+  if(fallbackDate){
+    const fallback=new Date(fallbackDate+'T12:00:00');
+    if(!isNaN(fallback)) return fallback.getTime();
+  }
+  return 0;
+};
+const alertKey=d=>[d.id,d.n,d.r,d.v,d.d,d.a,d.closedRaw||d.updatedRaw||d.createdRaw].map(x=>String(x||'').trim()).join('::');
 const setKpiStatus=(cardId, valueId, saldoPct)=>{
   const card=document.getElementById(cardId);
   const val=document.getElementById(valueId);
@@ -476,8 +522,11 @@ function makePie(id,mapData,old){
 }
 
 // ── TABELA ROTATIVA ──
-// Regras: data de fechamento coluna T, responsável coluna X
-// Filtra pelo mês atual, todos os estados, máx 12, embaralha a cada 10min
+// Regras oficiais:
+// - tabela mostra as 12 últimas negociações pela data de abertura/criação da proposta;
+// - deve conter os 3 status quando existirem: Vendida, Em Andamento e Perdida;
+// - embaralha periodicamente para não ficar sempre na mesma ordem;
+// - data de fechamento NÃO é usada para ordenar esta tabela.
 function shuffleArray(arr){
   const a=[...arr];
   for(let i=a.length-1;i>0;i--){
@@ -490,53 +539,61 @@ function shuffleArray(arr){
 let tabelaOrdem=[], tabelaMesRef=-1;
 
 function iniciarTabela(deals, mes, ano){
-  // 12 mais recentes globais — sem filtro de mês, todos os 3 status
-  const vendidas  = deals.filter(d=>d.s==='Vendida' && d.d)
-                         .sort((a,b)=>b.d.localeCompare(a.d));
-  const andamento = deals.filter(d=>d.s==='Em Andamento')
-                         .sort((a,b)=>alertTime(b)-alertTime(a));
-  const perdidas  = deals.filter(d=>d.s==='Perdida' && d.d)
-                         .sort((a,b)=>b.d.localeCompare(a.d));
+  const porAberturaDesc = (a,b) => dataAberturaTime(b) - dataAberturaTime(a);
+  const todasRecentes = [...deals]
+    .filter(d => dataAberturaTime(d) > 0)
+    .sort(porAberturaDesc);
+
+  const vendidas  = todasRecentes.filter(d => d.s === 'Vendida');
+  const andamento = todasRecentes.filter(d => d.s === 'Em Andamento');
+  const perdidas  = todasRecentes.filter(d => d.s === 'Perdida');
 
   function montarMix(){
     const TOTAL = 12;
-    // Garante pelo menos 1 de cada status se existir, distribui o resto
-    let qV = vendidas.length  > 0 ? Math.max(1, Math.round(TOTAL * 0.50)) : 0;
-    let qA = andamento.length > 0 ? Math.max(1, Math.round(TOTAL * 0.25)) : 0;
-    let qP = perdidas.length  > 0 ? Math.max(1, Math.round(TOTAL * 0.25)) : 0;
-    qV = Math.min(qV, vendidas.length);
-    qA = Math.min(qA, andamento.length);
-    qP = Math.min(qP, perdidas.length);
-    // Completa até 12 com quem tiver mais disponível
-    let resto = TOTAL - qV - qA - qP;
-    if(resto > 0){ const add=Math.min(resto, vendidas.length-qV);  qV+=add; resto-=add; }
-    if(resto > 0){ const add=Math.min(resto, andamento.length-qA); qA+=add; resto-=add; }
-    if(resto > 0){ const add=Math.min(resto, perdidas.length-qP);  qP+=add; }
-    // Embaralha dentro de um pool 2x maior para variar a cada ciclo
-    const v = shuffleArray(vendidas.slice(0,  Math.min(qV*2+3,  vendidas.length))).slice(0, qV);
-    const a = shuffleArray(andamento.slice(0, Math.min(qA*2+3, andamento.length))).slice(0, qA);
-    const p = shuffleArray(perdidas.slice(0,  Math.min(qP*2+3,  perdidas.length))).slice(0, qP);
-    return shuffleArray([...v, ...a, ...p]);
+    const escolhidos = [];
+    const usados = new Set();
+
+    // Garante presença dos três status quando existirem.
+    [vendidas, andamento, perdidas].forEach(grupo => {
+      if (grupo.length) {
+        const item = shuffleArray(grupo.slice(0, Math.min(6, grupo.length)))[0];
+        if (item && !usados.has(item.id || alertKey(item))) {
+          escolhidos.push(item);
+          usados.add(item.id || alertKey(item));
+        }
+      }
+    });
+
+    // Completa com as negociações mais recentes por abertura.
+    for (const item of todasRecentes) {
+      if (escolhidos.length >= TOTAL) break;
+      const chave = item.id || alertKey(item);
+      if (!usados.has(chave)) {
+        escolhidos.push(item);
+        usados.add(chave);
+      }
+    }
+
+    return shuffleArray(escolhidos.slice(0, TOTAL));
   }
 
   tabelaOrdem = montarMix();
-  tabelaMesRef = mes;
   renderTabela();
   clearInterval(tabelaTimer);
   tabelaTimer = setInterval(()=>{
     tabelaOrdem = montarMix();
     renderTabela();
-  }, 10*60*1000);
+  },10*60*1000);
 }
 
 function renderTabela(){
   if(!tabelaOrdem.length){
-    document.getElementById('tbl-body').innerHTML='<tr><td colspan="6" style="text-align:center;color:#52605a;padding:20px;">Sem negociações no mês</td></tr>';
+    document.getElementById('tbl-body').innerHTML='<tr><td colspan="5" style="text-align:center;color:#52605a;padding:20px;">Sem negociações recentes</td></tr>';
     return;
   }
   document.getElementById('tbl-body').innerHTML=tabelaOrdem.map(d=>{
     const badge=d.s==='Vendida'?'<span class="bv">FECHADO</span>':d.s==='Em Andamento'?'<span class="ba">ANDAMENTO</span>':'<span class="bp">PERDIDA</span>';
-    return`<tr><td class="td-date">${fDtShort(d.d)}</td><td class="td-vend">${esc(d.r)}</td><td class="td-cli">${esc(d.e)}</td><td class="td-tipo">${esc(d.t)}</td><td style="white-space:nowrap">${badge}</td></tr>`;
+    return`<tr><td class="td-date">${fDtShort(d.a||d.u||d.d)}</td><td class="td-vend">${esc(d.r)}</td><td class="td-cli">${esc(d.e)}</td><td class="td-tipo">${esc(d.t)}</td><td style="white-space:nowrap">${badge}</td></tr>`;
   }).join('');
 }
 
@@ -688,12 +745,12 @@ function render(){
     }
   });
 
-  // Tabela rotativa — mês atual, coluna T (data fechamento), coluna X (responsável)
+  // Tabela rotativa — 12 últimas pela data de abertura/criação da proposta
   iniciarTabela(DEALS_DATA, mes, ano);
 
   // Ranking por VALOR — Vendidas do mês com dados; se mês atual vazio, usa mês mais recente com vendas
-  const EXCLUIR_RANKING = ['tatiane mustafa', 'tatiane', 'kelly rosti', 'kelly'];
-  function excluirRanking(nome){ return EXCLUIR_RANKING.some(e => (nome||'').toLowerCase().includes(e)); }
+  const EXCLUIR_RANKING = ['tatiane mustafa', 'tatiane', 'tati', 'kelly rosti', 'kelly', 'rhana'];
+  function excluirRanking(nome){ const n=nomeNormalizado(nome); return EXCLUIR_RANKING.some(e => n.includes(e)); }
 
   const mapRval={}, mapRqtd={};
   DEALS_DATA.forEach(d=>{
@@ -752,12 +809,6 @@ async function init() {
     const [deals, metas] = await Promise.all([fetchDealsRD(), fetchMetas()]);
     DEALS_DATA = deals;
 
-    // DEBUG — remove depois de confirmar que win/won chegam corretamente
-    const estados = {};
-    DEALS_DATA.forEach(d => { estados[d.s] = (estados[d.s]||0)+1; });
-    console.log('Estados detectados:', estados);
-    const amostra = DEALS_DATA.find(d => d.d && d.d.startsWith('2026-05'));
-    if (amostra) console.log('Amostra maio:', JSON.stringify(amostra));
 
     // Atualiza metas na PLANILHA a partir do dados.json (SharePoint)
     // Campos normalizados pelo fetchMetas (sem _x003a_)
@@ -800,8 +851,8 @@ window.addEventListener('DOMContentLoaded', () => {
   init();
   iniciarPollingAlerta();
 });
-// Auto-refresh a cada 2 minutos (dados do RD + metas)
-setInterval(init, 2 * 60 * 1000);
+// Auto-refresh alinhado ao Fluxo 1 do Power Automate (RD + SharePoint)
+setInterval(init, REFRESH_DADOS_MS);
 
 // ── POLLING DO ALERTA (alerta.json gravado pelo Fluxo 2) ──
 // Verifica a cada 30 segundos. Só dispara se o deal_id mudou.
@@ -809,7 +860,42 @@ setInterval(init, 2 * 60 * 1000);
 let alertaPolling = false;
 function iniciarPollingAlerta() {
   verificarAlerta(); // primeira verificação imediata
-  setInterval(verificarAlerta, 30 * 1000);
+  setInterval(verificarAlerta, POLLING_ALERTA_MS);
+}
+
+function dealFromAlerta(a){
+  const valor = valorNumero(a.valor || a.value || a.amount_total || a.amount_unique || a.total);
+  const fechamentoRaw = a.closed_at || a.data_fechamento || a.timestamp || new Date().toISOString();
+  const aberturaRaw = a.created_at || a.data_abertura || a.timestamp || fechamentoRaw;
+  return {
+    id: a.deal_id || a.id || a._id || a.dealId || '',
+    n: a.deal_name || a.name || '',
+    e: a.cliente || a.empresa || a.organization?.name || a.company?.name || '',
+    s: 'Vendida',
+    v: String(valor),
+    d: normalizarData(fechamentoRaw),
+    a: normalizarData(aberturaRaw),
+    u: normalizarData(a.updated_at || a.timestamp || fechamentoRaw),
+    r: a.vendedor || a.user?.name || a.responsible?.name || '',
+    t: a.tipo || a.tipo_projeto || a.type || 'Não informado',
+    closedRaw: fechamentoRaw,
+    createdRaw: aberturaRaw,
+    updatedRaw: a.updated_at || a.timestamp || fechamentoRaw
+  };
+}
+
+function integrarVendaAlerta(a){
+  const deal = dealFromAlerta(a);
+  if (!deal.id && !deal.n) return false;
+  const chaveNova = deal.id || alertKey(deal);
+  const idx = DEALS_DATA.findIndex(d => (d.id && d.id === deal.id) || alertKey(d) === chaveNova);
+  if (idx >= 0) {
+    DEALS_DATA[idx] = { ...DEALS_DATA[idx], ...deal };
+  } else {
+    DEALS_DATA.unshift(deal);
+  }
+  render();
+  return true;
 }
 
 async function verificarAlerta() {
@@ -826,7 +912,8 @@ async function verificarAlerta() {
     const chaveAnterior = localStorage.getItem('alertaVendaId') || '';
 
     if (chaveAnterior && chaveAnterior !== chaveAtual) {
-      mostrarAlerta(a.deal_name || '', a.cliente || '', a.vendedor || '');
+      integrarVendaAlerta(a);
+      mostrarAlerta(a.deal_name || a.name || '', a.cliente || a.empresa || '', a.vendedor || '');
     }
 
     localStorage.setItem('alertaVendaId', chaveAtual);
