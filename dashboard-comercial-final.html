@@ -266,19 +266,22 @@ async function fetchDealsRD() {
           ? data.deals
           : [];
   // Normaliza formato RD Station para formato interno do dashboard
-  // API RD Station retorna: state = "Vendida" | "Perdida" | "Em Andamento" (em português)
+  // O dados.json gravado pelo Power Automate usa a API REST do RD Station:
+  // win: true  → Vendida
+  // win: false + closed_at preenchido → Perdida
+  // win: false + sem closed_at → Em Andamento
   const normalized = list.map(d => {
-    // Prioridade: campo state (PT) > win/won/lost (EN legado)
-    const stateRaw = (d.state || d.Estado || d.estado || '').trim();
     let estado = 'Em Andamento';
-    if (stateRaw === 'Vendida'      || stateRaw === 'won')  estado = 'Vendida';
-    else if (stateRaw === 'Perdida' || stateRaw === 'lost') estado = 'Perdida';
-    else if (stateRaw === 'Em Andamento' || stateRaw === 'open') estado = 'Em Andamento';
-    else {
-      // Fallback legado boolean win/won
-      const winVal = d.won ?? d.win;
-      if (winVal === true || winVal === 'true' || winVal === 1) estado = 'Vendida';
-      else if (d.lost === true || d.lost === 'true') estado = 'Perdida';
+    const winVal = d.win === true || d.win === 'true' || d.win === 1;
+    const lostVal = d.lost === true || d.lost === 'true';
+    const temFechamento = !!(d.closed_at && String(d.closed_at).trim() !== '' && String(d.closed_at) !== 'null');
+
+    if (winVal) {
+      estado = 'Vendida';
+    } else if (lostVal || (!winVal && temFechamento)) {
+      estado = 'Perdida';
+    } else {
+      estado = 'Em Andamento';
     }
     // Data: closed_at para vendidas e perdidas, updated_at para em andamento
     let dt = '';
@@ -314,8 +317,8 @@ async function fetchDealsRD() {
       s: estado,
       v: String(valor),
       d: dt,
-      // responsible.name (API RD Station) ou user.name (formato legado)
-      r: d.responsible?.name || d.user?.name || '',
+      // responsible.name não existe — campo correto é user.name
+      r: d.user?.name || d.responsible?.name || '',
       t: tipo,
       closedRaw: d.closed_at || '',
       updatedRaw: d.updated_at || ''
