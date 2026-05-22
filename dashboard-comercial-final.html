@@ -266,10 +266,40 @@ function normalizarData(rawDate) {
 }
 
 function valorNumero(v) {
-  if (v === null || v === undefined) return 0;
+  if (v === null || v === undefined || v === '') return 0;
   if (typeof v === 'number') return isFinite(v) ? v : 0;
-  const str = String(v).trim().replace(/\./g, '').replace(',', '.').replace(/[^0-9.-]/g, '');
-  const n = parseFloat(str);
+
+  let str = String(v).trim();
+  if (!str || str === '-') return 0;
+
+  // Remove moeda, espaços e caracteres que não fazem parte do número.
+  str = str.replace(/R\$/gi, '').replace(/\s/g, '').replace(/[^0-9,.-]/g, '');
+
+  const hasComma = str.includes(',');
+  const hasDot = str.includes('.');
+
+  if (hasComma && hasDot) {
+    // Formato brasileiro: 1.234,56
+    if (str.lastIndexOf(',') > str.lastIndexOf('.')) {
+      str = str.replace(/\./g, '').replace(',', '.');
+    } else {
+      // Formato americano: 1,234.56
+      str = str.replace(/,/g, '');
+    }
+  } else if (hasComma) {
+    // Vírgula como decimal: 1234,56
+    str = str.replace(',', '.');
+  } else if (hasDot) {
+    const parts = str.split('.');
+    // Se houver vários pontos, trata como separador de milhar, exceto o último decimal.
+    if (parts.length > 2) {
+      const last = parts.pop();
+      str = parts.join('') + '.' + last;
+    }
+    // Se houver apenas um ponto, mantém como decimal: 258320.54 ou 540000.00
+  }
+
+  const n = Number(str);
   return isFinite(n) ? n : 0;
 }
 
@@ -373,13 +403,23 @@ async function fetchMetas() {
       return [];
     }
 
-    const arr = Array.isArray(raw?.metas) ? raw.metas : [];
+    // Estrutura correta atual: { rd:{ deals:[...] }, metas:[...] }
+    // Tolerância para estrutura anterior: { rd:{ deals:[...], metas:[...] } }
+    const arr = Array.isArray(raw?.metas)
+      ? raw.metas
+      : Array.isArray(raw?.rd?.metas)
+        ? raw.rd.metas
+        : [];
 
-    // Normaliza campos com sufixo _x003a_ (Excel Online SharePoint)
+    // Normaliza campos do Excel Online/SharePoint.
+    // Ex.: "Faturado_x003a_" -> "Faturado"; também remove espaços e underscores residuais.
     return arr.map(m => {
       const norm = {};
       Object.entries(m || {}).forEach(([k, v]) => {
-        const clean = String(k).replace(/_x003a_/gi, '').trim();
+        const clean = String(k)
+          .replace(/_x003a_/gi, '')
+          .replace(/_+$/g, '')
+          .trim();
         norm[clean] = v;
       });
       return norm;
@@ -388,6 +428,27 @@ async function fetchMetas() {
     console.warn('Metas não carregadas:', e);
     return [];
   }
+}
+
+// ── LEITURA ROBUSTA DAS METAS DO SHAREPOINT ──
+function campoMeta(obj, nomes) {
+  if (!obj) return undefined;
+  for (const nome of nomes) {
+    if (Object.prototype.hasOwnProperty.call(obj, nome)) return obj[nome];
+  }
+  const mapa = {};
+  Object.keys(obj).forEach(k => { mapa[nomeNormalizado(k)] = k; });
+  for (const nome of nomes) {
+    const chave = mapa[nomeNormalizado(nome)];
+    if (chave !== undefined) return obj[chave];
+  }
+  return undefined;
+}
+
+function mesCanonico(valor) {
+  const n = nomeNormalizado(valor);
+  const idx = MESES_PT.findIndex(m => nomeNormalizado(m) === n || nomeNormalizado(m).slice(0,3) === n.slice(0,3));
+  return idx >= 0 ? MESES_PT[idx] : '';
 }
 
 // ── VARIÁVEL GLOBAL DE DEALS (preenchida pelo init) ──
@@ -810,31 +871,25 @@ async function init() {
     DEALS_DATA = deals;
 
 
-    // Atualiza metas na PLANILHA a partir do dados.json (SharePoint)
-    // Campos normalizados pelo fetchMetas (sem _x003a_)
-    // Exemplo real: { Mês: "Janeiro", Faturado: "258320.54", "Meta Minima": "420000", "Meta Desejável": "462000" }
+    // Atualiza metas na PLANILHA a partir do dados.json (SharePoint).
+    // Esta parte é isolada: não altera RD, ranking, tabela, tipo de projeto nem alerta.
+    Object.keys(PLANILHA).forEach(k => delete PLANILHA[k]);
+
     if (metas && metas.length > 0) {
       metas.forEach(m => {
-        // Ano: pode vir explícito ou inferimos do ano atual
-        const ano = String(m['Ano'] || m['ANO'] || new Date().getFullYear());
-        // Mês: campo normalizado "Mês" (sem _x003a_)
-        const mes = m['Mês'] || m['Mes'] || m['MES'] || '';
+        const ano = String(campoMeta(m, ['Ano', 'ANO', 'Ano:', 'Ano_x003a_']) || new Date().getFullYear()).trim();
+        const mes = mesCanonico(campoMeta(m, ['Mês', 'Mes', 'MES', 'Mês:', 'Mês_x003a_']));
         if (!mes) return;
 
-        const fat = parseFloat((m['Faturado']          || m['FATURADO']          || '0').toString().replace(',','.')) || 0;
-        const min = parseFloat((m['Meta Minima']       || m['MetaMin']           || m['Meta Mínima']   || '0').toString().replace(',','.')) || 0;
-        const des = parseFloat((m['Meta Desejável']    || m['MetaDes']           || m['Meta Desejavel'] || '0').toString().replace(',','.')) || 0;
+        const fat = valorNumero(campoMeta(m, ['Faturado', 'Faturado:', 'Faturado_x003a_', 'FATURADO']));
+        const min = valorNumero(campoMeta(m, ['Meta Minima', 'Meta Mínima', 'Meta Minima:', 'Meta Mínima:', 'Meta Minima_x003a_', 'Meta Mínima_x003a_', 'MetaMin']));
+        const des = valorNumero(campoMeta(m, ['Meta Desejável', 'Meta Desejavel', 'Meta Desejável:', 'Meta Desejavel:', 'Meta Desejável_x003a_', 'Meta Desejavel_x003a_', 'MetaDes']));
 
-        // Cria a estrutura do ano/mês se não existir
         if (!PLANILHA[ano]) PLANILHA[ano] = {};
-        if (!PLANILHA[ano][mes]) PLANILHA[ano][mes] = { fat: 0, min: 0, des: 0 };
-
-        // Só sobrescreve se o valor vier preenchido na planilha
-        if (fat) PLANILHA[ano][mes].fat = fat;
-        if (min) PLANILHA[ano][mes].min = min;
-        if (des) PLANILHA[ano][mes].des = des;
+        PLANILHA[ano][mes] = { fat, min, des };
       });
     }
+
 
     render();
 
