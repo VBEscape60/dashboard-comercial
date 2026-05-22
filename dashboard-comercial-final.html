@@ -490,28 +490,32 @@ function shuffleArray(arr){
 let tabelaOrdem=[], tabelaMesRef=-1;
 
 function iniciarTabela(deals, mes, ano){
-  // Vendidas e Em Andamento: filtra pelo mês atual
-  const doMes = deals.filter(d=>{
-    if(!d.d) return false;
-    const dt = new Date(d.d+'T12:00:00');
-    return dt.getMonth()===mes && dt.getFullYear()===ano;
-  });
-
-  const vendidas  = doMes.filter(d=>d.s==='Vendida');
-  const andamento = doMes.filter(d=>d.s==='Em Andamento');
-
-  // Perdidas: pega as mais recentes do ano todo (RD não registra closed_at para perdidas)
-  const perdidas = deals
-    .filter(d=>d.s==='Perdida' && d.d)
-    .sort((a,b)=>b.d.localeCompare(a.d))
-    .slice(0,20);
-
-  function pick(arr, n){ return shuffleArray(arr).slice(0,n); }
+  // 12 mais recentes globais — sem filtro de mês, todos os 3 status
+  const vendidas  = deals.filter(d=>d.s==='Vendida' && d.d)
+                         .sort((a,b)=>b.d.localeCompare(a.d));
+  const andamento = deals.filter(d=>d.s==='Em Andamento')
+                         .sort((a,b)=>alertTime(b)-alertTime(a));
+  const perdidas  = deals.filter(d=>d.s==='Perdida' && d.d)
+                         .sort((a,b)=>b.d.localeCompare(a.d));
 
   function montarMix(){
-    const v = pick(vendidas,  Math.min(vendidas.length,  6));
-    const a = pick(andamento, Math.min(andamento.length, 5));
-    const p = pick(perdidas,  Math.min(perdidas.length,  16 - v.length - a.length));
+    const TOTAL = 12;
+    // Garante pelo menos 1 de cada status se existir, distribui o resto
+    let qV = vendidas.length  > 0 ? Math.max(1, Math.round(TOTAL * 0.50)) : 0;
+    let qA = andamento.length > 0 ? Math.max(1, Math.round(TOTAL * 0.25)) : 0;
+    let qP = perdidas.length  > 0 ? Math.max(1, Math.round(TOTAL * 0.25)) : 0;
+    qV = Math.min(qV, vendidas.length);
+    qA = Math.min(qA, andamento.length);
+    qP = Math.min(qP, perdidas.length);
+    // Completa até 12 com quem tiver mais disponível
+    let resto = TOTAL - qV - qA - qP;
+    if(resto > 0){ const add=Math.min(resto, vendidas.length-qV);  qV+=add; resto-=add; }
+    if(resto > 0){ const add=Math.min(resto, andamento.length-qA); qA+=add; resto-=add; }
+    if(resto > 0){ const add=Math.min(resto, perdidas.length-qP);  qP+=add; }
+    // Embaralha dentro de um pool 2x maior para variar a cada ciclo
+    const v = shuffleArray(vendidas.slice(0,  Math.min(qV*2+3,  vendidas.length))).slice(0, qV);
+    const a = shuffleArray(andamento.slice(0, Math.min(qA*2+3, andamento.length))).slice(0, qA);
+    const p = shuffleArray(perdidas.slice(0,  Math.min(qP*2+3,  perdidas.length))).slice(0, qP);
     return shuffleArray([...v, ...a, ...p]);
   }
 
@@ -542,10 +546,30 @@ function render(){
   const mesNome=MESES_PT[mes];
   const mesAno=mesNome.toUpperCase()+'/'+String(ano).slice(2);
 
+  // Detecta o mês/ano mais recente com vendas nos dados
+  // (os dados podem ser de ano anterior ao do sistema)
+  let rankMes=mes, rankAno=ano;
+  const vendasSistema=DEALS_DATA.filter(d=>{
+    if(d.s!=='Vendida'||!d.d) return false;
+    const dt=new Date(d.d+'T12:00:00');
+    return dt.getMonth()===mes&&dt.getFullYear()===ano;
+  });
+  if(vendasSistema.length===0){
+    const vendasComData=DEALS_DATA.filter(d=>d.s==='Vendida'&&d.d);
+    if(vendasComData.length>0){
+      vendasComData.sort((a,b)=>b.d.localeCompare(a.d));
+      const dtRef=new Date(vendasComData[0].d+'T12:00:00');
+      rankMes=dtRef.getMonth();
+      rankAno=dtRef.getFullYear();
+    }
+  }
+  const rankMesNome=MESES_PT[rankMes];
+  const foraDoMes=(rankMes!==mes||rankAno!==ano);
+
   document.getElementById('tb-mes').textContent=mesNome.toUpperCase()+' DE '+ano;
   document.getElementById('tb-upd').textContent='Atualizado às '+now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
   document.getElementById('donut-mes-lbl').textContent=mesAno;
-  document.getElementById('tipo-mes-lbl').textContent=mesNome.substring(0,3).toUpperCase()+'/'+String(ano).slice(2);
+  document.getElementById('tipo-mes-lbl').textContent=rankMesNome.substring(0,3).toUpperCase()+'/'+String(rankAno).slice(2);
 
   const pl=(PLANILHA[ano]||{})[mesNome]||{fat:0,min:0,des:0};
   const fatMes=pl.fat,metaMin=pl.min,metaDes=pl.des;
@@ -573,14 +597,15 @@ function render(){
   setKpiStatus('card-fmin','k-fmin',saldoMinAcum);
   setKpiStatus('card-fdes','k-fdes',saldoDesAcum);
 
-  // Vendas fechadas no mês
+  // Vendas fechadas no mês de referência (rankMes/rankAno)
   const vMes=DEALS_DATA.filter(d=>{
     if(d.s!=='Vendida'||!d.d)return false;
     const dt=new Date(d.d+'T12:00:00');
-    return dt.getMonth()===mes&&dt.getFullYear()===ano;
+    return dt.getMonth()===rankMes&&dt.getFullYear()===rankAno;
   });
   document.getElementById('k-qtd').textContent=vMes.length;
-  document.getElementById('k-qtd-sub').textContent=vMes.length+' venda'+(vMes.length!==1?'s':'')+' fechada'+(vMes.length!==1?'s':'')+' no mês';
+  const kqtdLabel=foraDoMes?' ('+rankMesNome.substring(0,3)+'/'+String(rankAno).slice(2)+')':'';
+  document.getElementById('k-qtd-sub').textContent=vMes.length+' venda'+(vMes.length!==1?'s':'')+' fechada'+(vMes.length!==1?'s':'')+' no mês'+kqtdLabel;
 
   // Donut
   document.getElementById('d-pct').textContent=fP(pAdes);
@@ -666,7 +691,7 @@ function render(){
   // Tabela rotativa — mês atual, coluna T (data fechamento), coluna X (responsável)
   iniciarTabela(DEALS_DATA, mes, ano);
 
-  // Ranking por VALOR — só Vendidas do mês, exclui Tatiane e Kelly
+  // Ranking por VALOR — Vendidas do mês com dados; se mês atual vazio, usa mês mais recente com vendas
   const EXCLUIR_RANKING = ['tatiane mustafa', 'tatiane', 'kelly rosti', 'kelly'];
   function excluirRanking(nome){ return EXCLUIR_RANKING.some(e => (nome||'').toLowerCase().includes(e)); }
 
@@ -674,17 +699,21 @@ function render(){
   DEALS_DATA.forEach(d=>{
     if(d.s!=='Vendida'||!d.d) return;
     const dt=new Date(d.d+'T12:00:00');
-    if(dt.getMonth()!==mes||dt.getFullYear()!==ano) return;
+    if(dt.getMonth()!==rankMes||dt.getFullYear()!==rankAno) return;
     const n=d.r||'Sem responsável';
     if(excluirRanking(n)) return;
     mapRval[n]=(mapRval[n]||0)+(parseFloat(d.v)||0);
     mapRqtd[n]=(mapRqtd[n]||0)+1;
   });
-  // NÃO adiciona vendedores com 0 — só mostra quem vendeu no mês
-  const sortedR=Object.entries(mapRval).sort((a,b)=>b[1]-a[1]);
+  const rankLabel = foraDoMes ? ` — ${rankMesNome.substring(0,3).toUpperCase()}/${String(rankAno).slice(2)}` : '';
+  const rankTtlEl = document.getElementById('rank-list').closest('.card')?.querySelector('.card-ttl');
+  if(rankTtlEl) rankTtlEl.innerHTML = `<span style="width:2px;height:12px;border-radius:2px;background:var(--green);display:inline-block;flex-shrink:0;margin-right:6px"></span>RANKING${rankLabel}`;
+
+  const sortedR=Object.entries(mapRval).sort((a,b)=>b[1]-a[1]).slice(0,6);
   const maxV=sortedR[0]?.[1]||1;
   const totV=Object.values(mapRval).reduce((s,v)=>s+v,0)||1;
-  document.getElementById('rank-list').innerHTML=sortedR.map(([nome,val],i)=>`
+  document.getElementById('rank-list').innerHTML=sortedR.length
+    ? sortedR.map(([nome,val],i)=>`
     <li class="rank-item">
       <span class="rank-n">${i+1}</span>
       <div class="rank-inf">
@@ -693,18 +722,19 @@ function render(){
       </div>
       <div class="rank-bw"><div class="rank-bar" style="width:${pct(val,maxV)}%"></div></div>
       <span class="rank-pct">${fP(pct(val,totV))}</span>
-    </li>`).join('');
+    </li>`).join('')
+    : '<li style="color:var(--muted);font-size:12px;padding:12px 0;text-align:center">Sem vendas no período</li>';
 
-  // Tipos de projeto — só Vendidas
+  // Tipos de projeto — usa rankMes/rankAno para o mensal, rankAno para o acumulado
   const dealsMes = DEALS_DATA.filter(d=>{
     if(d.s!=='Vendida'||!d.d) return false;
     const dt=new Date(d.d+'T12:00:00');
-    return dt.getMonth()===mes&&dt.getFullYear()===ano;
+    return dt.getMonth()===rankMes&&dt.getFullYear()===rankAno;
   });
   const dealsAno = DEALS_DATA.filter(d=>{
     if(d.s!=='Vendida'||!d.d) return false;
     const dt=new Date(d.d+'T12:00:00');
-    return dt.getFullYear()===ano;
+    return dt.getFullYear()===rankAno;
   });
   function mapTipo(lista){const m={};lista.forEach(d=>{const t=d.t||'Não informado';m[t]=(m[t]||0)+1;});return m;}
   cTipoMes=makePie('tipo-mes',mapTipo(dealsMes),cTipoMes);
