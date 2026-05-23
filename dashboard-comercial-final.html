@@ -957,21 +957,26 @@ async function verificarAlerta() {
   if (alertaPolling) return; // não encavala
   alertaPolling = true;
   try {
-    const res = await fetch(ALERTA_URL + '?t=' + Date.now());
+    const res = await fetch(ALERTA_URL + '?t=' + Date.now(), { cache: 'no-store' });
     if (!res.ok) return;
-    const a = await res.json();
-    // a deve ter: { deal_id, deal_name, vendedor, cliente, timestamp }
-    if (!a || !a.deal_id) return;
 
-    const chaveAtual    = String(a.deal_id) + '::' + String(a.timestamp || '');
+    let a = await res.json();
+    if (typeof a === 'string') a = JSON.parse(a);
+
+    // Aceita tanto o formato antigo do alerta.json quanto o objeto completo vindo do RD.
+    const deal = dealFromAlerta(a);
+    if (!deal.id && !deal.n) return;
+
+    const chaveAtual = String(deal.id || alertKey(deal)) + '::' + String(
+      a.timestamp || a.closed_at || a.updated_at || deal.closedRaw || ''
+    );
     const chaveAnterior = localStorage.getItem('alertaVendaId') || '';
 
-    if (chaveAnterior && chaveAnterior !== chaveAtual) {
+    if (chaveAtual && chaveAnterior !== chaveAtual) {
       integrarVendaAlerta(a);
-      mostrarAlerta(a.deal_name || a.name || '', a.cliente || a.empresa || '', a.vendedor || '');
+      mostrarAlerta(deal.n || 'Venda Fechada', deal.e || '', deal.r || '');
+      localStorage.setItem('alertaVendaId', chaveAtual);
     }
-
-    localStorage.setItem('alertaVendaId', chaveAtual);
   } catch(e) {
     // alerta.json pode não existir ainda — ignora silenciosamente
   } finally {
