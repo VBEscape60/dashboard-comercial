@@ -954,31 +954,39 @@ function integrarVendaAlerta(a){
 }
 
 async function verificarAlerta() {
-  if (alertaPolling) return; // não encavala
+  if (alertaPolling) return; // não encavala chamadas simultâneas
   alertaPolling = true;
+
   try {
     const res = await fetch(ALERTA_URL + '?t=' + Date.now(), { cache: 'no-store' });
     if (!res.ok) return;
 
-    let a = await res.json();
-    if (typeof a === 'string') a = JSON.parse(a);
+    let alerta = await res.json();
+    if (typeof alerta === 'string') alerta = JSON.parse(alerta);
+    if (!alerta) return;
 
-    // Aceita tanto o formato antigo do alerta.json quanto o objeto completo vindo do RD.
-    const deal = dealFromAlerta(a);
-    if (!deal.id && !deal.n) return;
+    // O alerta é um projeto separado do painel principal.
+    // Ele só lê alerta.json e dispara overlay/som.
+    // Não altera ranking, cards, gráficos, tabela nem DEALS_DATA.
+    const id = alerta._id || alerta.id || alerta.deal_id || '';
+    const data = alerta.closed_at || alerta.updated_at || alerta.timestamp || '';
+    const chaveAtual = String(id) + '::' + String(data);
 
-    const chaveAtual = String(deal.id || alertKey(deal)) + '::' + String(
-      a.timestamp || a.closed_at || a.updated_at || deal.closedRaw || ''
-    );
+    if (!id || !chaveAtual) return;
+
     const chaveAnterior = localStorage.getItem('alertaVendaId') || '';
+    if (chaveAnterior === chaveAtual) return;
 
-    if (chaveAtual && chaveAnterior !== chaveAtual) {
-      integrarVendaAlerta(a);
-      mostrarAlerta(deal.n || 'Venda Fechada', deal.e || '', deal.r || '');
-      localStorage.setItem('alertaVendaId', chaveAtual);
-    }
+    localStorage.setItem('alertaVendaId', chaveAtual);
+
+    const nomeVenda = alerta.name || alerta.deal_name || 'Venda Fechada';
+    const cliente = (alerta.organization && alerta.organization.name) || alerta.cliente || '';
+    const vendedor = (alerta.user && alerta.user.name) || alerta.vendedor || '';
+
+    mostrarAlerta(nomeVenda, cliente, vendedor);
+
   } catch(e) {
-    // alerta.json pode não existir ainda — ignora silenciosamente
+    console.log('Erro ao verificar alerta:', e);
   } finally {
     alertaPolling = false;
   }
