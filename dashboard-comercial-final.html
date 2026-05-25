@@ -150,6 +150,48 @@ html,body{
 /* CONFETTI */
 .cfp{position:fixed;width:9px;height:9px;border-radius:2px;animation:cfFall linear forwards;pointer-events:none;}
 @keyframes cfFall{0%{transform:translateY(-20px) rotate(0deg);opacity:1}100%{transform:translateY(100vh) rotate(720deg);opacity:0}}
+
+/* AJUSTE TV 42" - encaixe seguro sem alterar layout ou dados */
+@media (min-width:900px) and (min-height:650px){
+  html,body{width:100%;height:100%;}
+  body{padding:8px;background-color:var(--bg);}
+  .topbar{height:38px;border-radius:8px;margin-bottom:6px;}
+  .layout{height:calc(100vh - 60px);padding:0;gap:6px;}
+  .kpi{padding:7px 12px 6px;}
+  .kpi-lbl{font-size:12px;}
+  .kpi-val{font-size:38px;}
+  .card{padding:8px;}
+  .card-ttl{font-size:14px;margin-bottom:4px;}
+  .kpi,.card{box-shadow:0 0 0 1px rgba(255,255,255,0.015) inset;}
+  .kpi-lbl,.card-ttl,.acum-s-lbl,.tbl th{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .acum-s-lbl{font-size:12px;}
+  .acum-s-val{font-size:27px;}
+  .donut-wrap{width:108px;height:108px;margin-bottom:6px;}
+  .donut-pct{font-size:25px;}
+  .legend li,.leg-val{font-size:14px;}
+  .tbl th{font-size:12px;padding:0 5px 4px;}
+  .tbl td{font-size:13px;padding:4px 5px;}
+  .tbl td,.tbl th{line-height:1.18;}
+  .td-date{font-size:14px;}
+  .td-tipo{font-size:12px;}
+  .bv,.ba,.bp{font-size:11px;padding:2px 6px;}
+  .tipo-leg{align-content:flex-start;gap:1px;margin-top:2px;overflow:hidden;}
+  .tipo-leg-item{gap:3px;padding:0 2px;}
+  .tipo-leg-dot{width:7px;height:7px;}
+  .tipo-leg-txt{font-size:13px;line-height:1.12;}
+  .rank-list{gap:4px;}
+  .rank-item{min-height:0;padding:6px 9px;gap:7px;}
+  .rank-n{font-size:20px;min-width:22px;}
+  .rank-name{font-size:15px;line-height:1.15;}
+  .rank-sub{font-size:12px;}
+  .rank-bw{width:80px;}
+  .rank-pct{font-size:23px;min-width:62px;}
+}
+
+@media (width:1920px) and (height:1080px){
+  body{padding:10px;}
+  .layout{height:calc(100vh - 64px);}
+}
 </style>
 </head>
 <body>
