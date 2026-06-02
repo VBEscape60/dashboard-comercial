@@ -707,25 +707,12 @@ function render(){
   const mesNome=MESES_PT[mes];
   const mesAno=mesNome.toUpperCase()+'/'+String(ano).slice(2);
 
-  // Detecta o mês/ano mais recente com vendas nos dados
-  // (os dados podem ser de ano anterior ao do sistema)
-  let rankMes=mes, rankAno=ano;
-  const vendasSistema=DEALS_DATA.filter(d=>{
-    if(d.s!=='Vendida'||!d.d) return false;
-    const dt=new Date(d.d+'T12:00:00');
-    return dt.getMonth()===mes&&dt.getFullYear()===ano;
-  });
-  if(vendasSistema.length===0){
-    const vendasComData=DEALS_DATA.filter(d=>d.s==='Vendida'&&d.d);
-    if(vendasComData.length>0){
-      vendasComData.sort((a,b)=>b.d.localeCompare(a.d));
-      const dtRef=new Date(vendasComData[0].d+'T12:00:00');
-      rankMes=dtRef.getMonth();
-      rankAno=dtRef.getFullYear();
-    }
-  }
-  const rankMesNome=MESES_PT[rankMes];
-  const foraDoMes=(rankMes!==mes||rankAno!==ano);
+  // Ranking sempre do mês atual
+let rankMes = mes;
+let rankAno = ano;
+
+const rankMesNome = MESES_PT[rankMes];
+const foraDoMes = false;
 
   document.getElementById('tb-mes').textContent=mesNome.toUpperCase()+' DE '+ano;
   document.getElementById('tb-upd').textContent='Atualizado às '+now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
