@@ -847,7 +847,7 @@ const foraDoMes = false;
   DEALS_DATA.forEach(d=>{
     if(d.s!=='Vendida'||!d.d) return;
     const dt=new Date(d.d+'T12:00:00');
-    if(dt.getMonth()!==rankMes||dt.getFullYear()!==rankAno) return;
+    if(dt.getFullYear()!==rankAno || dt.getMonth()>rankMes) return;
     const n=d.r||'Sem responsável';
     if(excluirRanking(n)) return;
     mapRval[n]=(mapRval[n]||0)+(parseFloat(d.v)||0);
