@@ -573,7 +573,7 @@ function confetti(){
   }
 }
 
-// ── ALERTA (some em 3s) ──
+// ── ALERTA (some em 6s) ──
 function mostrarAlerta(nomeNeg, empresa, vendedor){
   clearInterval(alertCounter);
   // Extrai só o nome sem código (remove padrão "X99999 - ")
@@ -585,7 +585,7 @@ function mostrarAlerta(nomeNeg, empresa, vendedor){
   document.getElementById('v-sub').textContent=empresa?'Cliente: '+empresa:'';
   document.getElementById('venda-overlay').classList.add('show');
   tocarAudio(); confetti();
-  let sec=3;
+  let sec=6;
   document.getElementById('v-timer').textContent=`Fechando em ${sec}s...`;
   alertCounter=setInterval(()=>{
     sec--;
