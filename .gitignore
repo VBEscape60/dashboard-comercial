@@ -1,0 +1,22 @@
+# Segredos / ambiente
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.pfx
+*.p12
+
+# Dependências / build
+node_modules/
+dist/
+build/
+.vercel/
+__pycache__/
+*.pyc
+.venv/
+
+# SO / editor
+.DS_Store
+Thumbs.db
+.vscode/
