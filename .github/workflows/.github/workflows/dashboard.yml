@@ -4,6 +4,9 @@ on:
   repository_dispatch:
     types: [atualizar-dados]
 
+permissions:
+  contents: write
+
 jobs:
   atualizar-json:
     runs-on: ubuntu-latest
@@ -12,14 +15,22 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Criar dados.json
+      - name: Salvar payload recebido
         run: |
-          echo '${{ toJson(github.event.client_payload.dados) }}' > dados.json
+          cat > payload.json <<'JSON'
+          ${{ toJson(github.event.client_payload.dados) }}
+          JSON
+
+      - name: Criar dados.json seguro
+        run: |
+          node scripts/sanitize-dashboard-data.js payload.json dados.json
+          rm payload.json
 
       - name: Commit arquivo
         run: |
           git config --global user.name "github-actions"
           git config --global user.email "actions@github.com"
           git add dados.json
-          git commit -m "Atualizando dados dashboard" || echo "Sem alterações"
+          git diff --cached --quiet && echo "Sem alteracoes" && exit 0
+          git commit -m "Atualizando dados dashboard"
           git push
