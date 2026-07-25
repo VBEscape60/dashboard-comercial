@@ -1,0 +1,35 @@
+name: Sanear dados publicados
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - dados.json
+      - scripts/sanitize-dashboard-data.js
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  sanitize:
+    runs-on: ubuntu-latest
+    if: github.actor != 'github-actions[bot]'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Sanear dados.json
+        run: |
+          node scripts/sanitize-dashboard-data.js dados.json dados.safe.json
+          mv dados.safe.json dados.json
+
+      - name: Commitar se houve saneamento
+        run: |
+          git config --global user.name "github-actions"
+          git config --global user.email "actions@github.com"
+          git add dados.json
+          git diff --cached --quiet && echo "dados.json ja estava saneado" && exit 0
+          git commit -m "Sanear dados publicados"
+          git push
