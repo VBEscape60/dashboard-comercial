@@ -1,0 +1,56 @@
+name: Coletar dados do RD
+
+on:
+  schedule:
+    # A cada 30 minutos. O agendamento do GitHub pode atrasar em horario de pico.
+    - cron: '*/30 * * * *'
+  workflow_dispatch: {}
+
+# Evita que duas coletas escrevam o dados.json ao mesmo tempo.
+concurrency:
+  group: coletar-rd
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  coletar:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Usar Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Coletar negocios do RD Station
+        env:
+          RD_TOKEN: ${{ secrets.RD_TOKEN }}
+        run: node scripts/coletar-rd.js dados.json dados.raw.json
+
+      # O dados.json publicado precisa sair ja saneado: o workflow
+      # "Sanear dados publicados" ignora commits do github-actions[bot].
+      - name: Sanear para publicacao
+        run: |
+          node scripts/sanitize-dashboard-data.js dados.raw.json dados.safe.json
+          mv dados.safe.json dados.json
+          rm -f dados.raw.json
+
+      - name: Publicar se houve mudanca
+        run: |
+          git config --global user.name "github-actions"
+          git config --global user.email "actions@github.com"
+          git add dados.json
+          git diff --cached --quiet && echo "Sem alteracoes no dados.json" && exit 0
+          git commit -m "Atualizando dados dashboard"
+          for tentativa in 1 2 3 4 5; do
+            git push && exit 0
+            echo "Push rejeitado por atualizacao concorrente; rebase ($tentativa/5)..."
+            git pull --rebase origin main
+          done
+          echo "Nao foi possivel publicar o dados.json apos varias tentativas."
+          exit 1
