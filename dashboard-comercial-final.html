@@ -256,8 +256,8 @@ html,body{
         <div><div class="acum-s-lbl">Vendas no Ano</div><div class="acum-s-val w" id="ac-qtd">—</div></div>
       </div>
       <div class="bar-leg">
-        <span><i style="background:#15803d"></i>Bateu a desejável</span>
-        <span><i style="background:#22c55e"></i>Bateu a mínima</span>
+        <span><i style="background:#0c4a26;border:1px solid #1a7a42"></i>Bateu a desejável</span>
+        <span><i style="background:#4ade80"></i>Bateu a mínima</span>
         <span><i style="background:#3b82f6"></i>Mês corrente</span>
         <span><i style="background:#ef4444"></i>Abaixo da mínima</span>
       </div>
@@ -810,12 +810,12 @@ const foraDoMes = false;
   const mesAtual = mes; // captura mes no escopo correto para usar no chart
   // Cores: azul=mês corrente | verde escuro=bateu a desejável | verde=bateu a mínima | vermelho=não bateu
   const bcores  = bvals.map((v,i)=> i===mesAtual ? 'rgba(59,130,246,0.6)'
-                                  : bvalsDes[i]>=100 ? 'rgba(21,128,61,0.85)'
-                                  : v>=100 ? 'rgba(34,197,94,0.75)'
+                                  : bvalsDes[i]>=100 ? 'rgba(12,74,38,0.95)'
+                                  : v>=100 ? 'rgba(74,222,128,0.85)'
                                   : 'rgba(239,68,68,0.65)');
   const bbordes = bvals.map((v,i)=> i===mesAtual ? '#3b82f6'
-                                  : bvalsDes[i]>=100 ? '#15803d'
-                                  : v>=100 ? '#22c55e'
+                                  : bvalsDes[i]>=100 ? '#1a7a42'
+                                  : v>=100 ? '#86efac'
                                   : '#ef4444');
   const c2=document.getElementById('bar-anual').getContext('2d');
   if(cBar){cBar.destroy();cBar=null;}
