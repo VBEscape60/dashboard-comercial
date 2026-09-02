@@ -256,7 +256,7 @@ html,body{
         <div><div class="acum-s-lbl">Vendas no Ano</div><div class="acum-s-val w" id="ac-qtd">—</div></div>
       </div>
       <div class="bar-leg">
-        <span><i style="background:#b8860b;border:1px solid #d9a520"></i>Bateu a desejável</span>
+        <span><img src="assets/escapinho.png" alt="" style="height:15px;width:auto">Bateu a desejável</span>
         <span><i style="background:#22c55e"></i>Bateu a mínima</span>
         <span><i style="background:#3b82f6"></i>Mês corrente</span>
         <span><i style="background:#ef4444"></i>Abaixo da mínima</span>
@@ -820,13 +820,11 @@ const foraDoMes = false;
     bvalsDes.push(p.des>0?Math.round(pct(p.fat,p.des)*10)/10:0);
   }
   const mesAtual = mes; // captura mes no escopo correto para usar no chart
-  // Cores: azul=mês corrente | dourado=bateu a desejável | verde=bateu a mínima | vermelho=não bateu
+  // Cores: azul=mês corrente | verde=bateu a mínima (o Escapinho marca quem passou da desejável) | vermelho=não bateu
   const bcores  = bvals.map((v,i)=> i===mesAtual ? 'rgba(59,130,246,0.6)'
-                                  : bvalsDes[i]>=100 ? 'rgba(184,134,11,0.9)'
                                   : v>=100 ? 'rgba(34,197,94,0.75)'
                                   : 'rgba(239,68,68,0.65)');
   const bbordes = bvals.map((v,i)=> i===mesAtual ? '#3b82f6'
-                                  : bvalsDes[i]>=100 ? '#d9a520'
                                   : v>=100 ? '#22c55e'
                                   : '#ef4444');
   const c2=document.getElementById('bar-anual').getContext('2d');
@@ -873,8 +871,8 @@ const foraDoMes = false;
           if((bvalsDes[i]||0)<100) return;
           const larguraBarra=bar.width, alturaBarra=bar.base-bar.y;
           // Cabe com folga dentro da barra, sem encostar nas bordas nem no rótulo de %
-          const lado=Math.min(larguraBarra*0.72, alturaBarra*0.55, 68);
-          if(lado<20) return;
+          const lado=Math.min(larguraBarra*0.58, alturaBarra*0.44, 54);
+          if(lado<18) return;
           const prop=img.naturalHeight/img.naturalWidth;
           const w=lado, h=lado*prop;
           if(h>alturaBarra-12) return;
