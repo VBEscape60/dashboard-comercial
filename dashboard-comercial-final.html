@@ -256,7 +256,7 @@ html,body{
         <div><div class="acum-s-lbl">Vendas no Ano</div><div class="acum-s-val w" id="ac-qtd">—</div></div>
       </div>
       <div class="bar-leg">
-        <span><i style="background:#d4a017;border:1px solid #fbbf24"></i>Bateu a desejável</span>
+        <span><i style="background:#b8860b;border:1px solid #d9a520"></i>Bateu a desejável</span>
         <span><i style="background:#22c55e"></i>Bateu a mínima</span>
         <span><i style="background:#3b82f6"></i>Mês corrente</span>
         <span><i style="background:#ef4444"></i>Abaixo da mínima</span>
@@ -710,6 +710,18 @@ function renderTabela(){
   }).join('');
 }
 
+// ── ESCAPINHO (marca os meses que bateram a meta desejável no gráfico anual) ──
+// Carrega uma única vez; quando a imagem chega, redesenha o gráfico.
+let _escapinho=null,_escapinhoOk=false;
+function escapinhoImg(){
+  if(_escapinho) return _escapinhoOk?_escapinho:null;
+  _escapinho=new Image();
+  _escapinho.onload=()=>{ _escapinhoOk=true; if(cBar) cBar.draw(); };
+  _escapinho.onerror=()=>{ _escapinhoOk=false; };
+  _escapinho.src='assets/escapinho.png';
+  return null;
+}
+
 // ── RENDER PRINCIPAL ──
 function render(){
   const now=new Date(),mes=now.getMonth(),ano=now.getFullYear();
@@ -810,11 +822,11 @@ const foraDoMes = false;
   const mesAtual = mes; // captura mes no escopo correto para usar no chart
   // Cores: azul=mês corrente | dourado=bateu a desejável | verde=bateu a mínima | vermelho=não bateu
   const bcores  = bvals.map((v,i)=> i===mesAtual ? 'rgba(59,130,246,0.6)'
-                                  : bvalsDes[i]>=100 ? 'rgba(212,160,23,0.9)'
+                                  : bvalsDes[i]>=100 ? 'rgba(184,134,11,0.9)'
                                   : v>=100 ? 'rgba(34,197,94,0.75)'
                                   : 'rgba(239,68,68,0.65)');
   const bbordes = bvals.map((v,i)=> i===mesAtual ? '#3b82f6'
-                                  : bvalsDes[i]>=100 ? '#fbbf24'
+                                  : bvalsDes[i]>=100 ? '#d9a520'
                                   : v>=100 ? '#22c55e'
                                   : '#ef4444');
   const c2=document.getElementById('bar-anual').getContext('2d');
@@ -837,20 +849,40 @@ const foraDoMes = false;
         x:{grid:{color:'rgba(255,255,255,0.04)'},ticks:{color:'#edf0ee',font:{size:15}}},
         y:{grid:{color:'rgba(255,255,255,0.04)'},beginAtZero:true,ticks:{color:'#edf0ee',font:{size:15},callback:v=>v+'%'}}
       },
-      animation:{onComplete(){
-        const ch=this,ctx=ch.ctx;
+      animation:{duration:900}
+    },
+    plugins:[{
+      // Rótulos de % e o Escapinho nas barras que bateram a meta desejável.
+      // Fica no plugin (e não em animation.onComplete) para sobreviver a qualquer redesenho.
+      id:'rotulosEscapinho',
+      afterDatasetsDraw(ch){
+        const ctx=ch.ctx;
         ctx.save();
         ctx.font="bold 15px 'DM Sans',sans-serif";
         ctx.textAlign='center';ctx.textBaseline='bottom';ctx.fillStyle='#edf0ee';
-        ch.data.datasets.forEach((ds,di)=>{
-          ch.getDatasetMeta(di).data.forEach((bar,i)=>{
-            const v=ds.data[i];
-            if(v>0) ctx.fillText(v.toFixed(1)+'%',bar.x,bar.y-2);
-          });
+        ch.getDatasetMeta(0).data.forEach((bar,i)=>{
+          const v=bvals[i];
+          if(v>0) ctx.fillText(v.toFixed(1)+'%',bar.x,bar.y-2);
         });
         ctx.restore();
-      }}
-    }
+        const img=escapinhoImg();
+        if(!img||!img.complete||!img.naturalWidth) return;
+        ctx.save();
+        ch.getDatasetMeta(0).data.forEach((bar,i)=>{
+          if(i===mesAtual) return;
+          if((bvalsDes[i]||0)<100) return;
+          const larguraBarra=bar.width, alturaBarra=bar.base-bar.y;
+          // Cabe com folga dentro da barra, sem encostar nas bordas nem no rótulo de %
+          const lado=Math.min(larguraBarra*0.62, alturaBarra*0.5, 56);
+          if(lado<20) return;
+          const prop=img.naturalHeight/img.naturalWidth;
+          const w=lado, h=lado*prop;
+          if(h>alturaBarra-12) return;
+          ctx.drawImage(img, bar.x-w/2, (bar.y+bar.base)/2-h/2, w, h);
+        });
+        ctx.restore();
+      }
+    }]
   });
 
   // Tabela rotativa — 12 últimas pela data de abertura/criação da proposta
