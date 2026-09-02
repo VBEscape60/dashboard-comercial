@@ -99,6 +99,9 @@ html,body{
 .acum-s-val.r{color:var(--red);}
 .acum-s-val.w{color:var(--white);}
 .chart-flex{flex:1;position:relative;min-height:0;}
+.bar-leg{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:6px;flex-shrink:0;font-size:12px;color:var(--muted);}
+.bar-leg span{display:inline-flex;align-items:center;gap:5px;white-space:nowrap;}
+.bar-leg i{width:9px;height:9px;border-radius:2px;display:inline-block;}
 
 /* ── TABLE ── */
 .tbl-scroll{flex:1;overflow-y:auto;overflow-x:hidden;min-height:0;}
@@ -251,6 +254,12 @@ html,body{
         <div><div class="acum-s-lbl">% Atingido Acumulado</div><div class="acum-s-val g" id="ac-ating">—</div></div>
         <div><div class="acum-s-lbl">% Falta Acumulado</div><div class="acum-s-val r" id="ac-falta">—</div></div>
         <div><div class="acum-s-lbl">Vendas no Ano</div><div class="acum-s-val w" id="ac-qtd">—</div></div>
+      </div>
+      <div class="bar-leg">
+        <span><i style="background:#15803d"></i>Bateu a desejável</span>
+        <span><i style="background:#22c55e"></i>Bateu a mínima</span>
+        <span><i style="background:#3b82f6"></i>Mês corrente</span>
+        <span><i style="background:#ef4444"></i>Abaixo da mínima</span>
       </div>
       <div class="chart-flex"><canvas id="bar-anual"></canvas></div>
     </div>
@@ -787,25 +796,33 @@ const foraDoMes = false;
   });
   document.getElementById('ac-qtd').textContent=vAno.length;
 
-  // Barras por mês — % vs meta mensal individual, mas acumulado vs meta total
-  const blabels=[],bvals=[];
+  // Barras por mês — % vs META MÍNIMA mensal (a cor indica se passou da desejável)
+  const blabels=[],bvals=[],bvalsDes=[];
   for(let i=0;i<=mes;i++){
     const mn=MESES_PT[i];
-    const p=(PLANILHA[ano]||{})[mn]||{fat:0,des:0};
+    const p=(PLANILHA[ano]||{})[mn]||{fat:0,min:0,des:0};
     blabels.push(mn.substring(0,3)+'/'+String(ano).slice(2));
-    bvals.push(p.des>0?Math.round(pct(p.fat,p.des)*10)/10:0);
-    // cor: azul=mês atual, verde=bateu, vermelho=não bateu (mês já encerrado)
+    // Altura da barra = % da meta MÍNIMA do mês
+    bvals.push(p.min>0?Math.round(pct(p.fat,p.min)*10)/10:0);
+    // % da meta desejável (máxima) — usado só para definir a cor
+    bvalsDes.push(p.des>0?Math.round(pct(p.fat,p.des)*10)/10:0);
   }
   const mesAtual = mes; // captura mes no escopo correto para usar no chart
-  // Gera arrays de cores ANTES de criar o chart
-  const bcores  = bvals.map((v,i)=> i===mesAtual ? 'rgba(59,130,246,0.6)' : v>=100 ? 'rgba(34,197,94,0.75)' : 'rgba(239,68,68,0.65)');
-  const bbordes = bvals.map((v,i)=> i===mesAtual ? '#3b82f6' : v>=100 ? '#22c55e' : '#ef4444');
+  // Cores: azul=mês corrente | verde escuro=bateu a desejável | verde=bateu a mínima | vermelho=não bateu
+  const bcores  = bvals.map((v,i)=> i===mesAtual ? 'rgba(59,130,246,0.6)'
+                                  : bvalsDes[i]>=100 ? 'rgba(21,128,61,0.85)'
+                                  : v>=100 ? 'rgba(34,197,94,0.75)'
+                                  : 'rgba(239,68,68,0.65)');
+  const bbordes = bvals.map((v,i)=> i===mesAtual ? '#3b82f6'
+                                  : bvalsDes[i]>=100 ? '#15803d'
+                                  : v>=100 ? '#22c55e'
+                                  : '#ef4444');
   const c2=document.getElementById('bar-anual').getContext('2d');
   if(cBar){cBar.destroy();cBar=null;}
   cBar=new Chart(c2,{
     type:'bar',
     data:{labels:blabels,datasets:[{
-      label:'% Atingido por mês',data:bvals,
+      label:'% da Meta Mínima por mês',data:bvals,
       backgroundColor:bcores,
       borderColor:bbordes,
       borderWidth:1,borderRadius:3
@@ -814,7 +831,7 @@ const foraDoMes = false;
       responsive:true,maintainAspectRatio:false,
       plugins:{
         legend:{display:false},
-        tooltip:{backgroundColor:'#151817',titleColor:'#edf0ee',bodyColor:'#6b7a72',borderColor:'rgba(255,255,255,0.07)',borderWidth:1,callbacks:{label:c=>' '+c.parsed.y.toFixed(1)+'%'}}
+        tooltip:{backgroundColor:'#151817',titleColor:'#edf0ee',bodyColor:'#6b7a72',borderColor:'rgba(255,255,255,0.07)',borderWidth:1,callbacks:{label:c=>[' Mínima: '+c.parsed.y.toFixed(1)+'%',' Desejável: '+(bvalsDes[c.dataIndex]||0).toFixed(1)+'%']}}
       },
       scales:{
         x:{grid:{color:'rgba(255,255,255,0.04)'},ticks:{color:'#edf0ee',font:{size:15}}},
