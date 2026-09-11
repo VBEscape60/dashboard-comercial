@@ -27,9 +27,12 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Coletar negocios do RD Station
+      - name: Coletar negocios do RD Station e faturado do SGF
         env:
           RD_TOKEN: ${{ secrets.RD_TOKEN }}
+          # Faturado = notas ★ FC do SGF. Sem este secret, o faturado publicado e mantido.
+          SGF_INTEGRACAO_TOKEN: ${{ secrets.SGF_INTEGRACAO_TOKEN }}
+          SGF_API_URL: https://financeiro.portale60.com.br
         run: node scripts/coletar-rd.js dados.json dados.raw.json
 
       # O dados.json publicado precisa sair ja saneado: o workflow

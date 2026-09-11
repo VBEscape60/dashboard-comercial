@@ -20,10 +20,10 @@ const LIMIT = 200; // teto da API do RD; pedir mais nao aumenta a pagina
 const MAX_PAGINAS = 500; // trava de seguranca contra loop infinito
 const TENTATIVAS = 4;
 
-if (!TOKEN) {
-  console.error('RD_TOKEN nao definido. Cadastre o secret no repositorio.');
-  process.exit(1);
-}
+// Faturado corporativo (notas ★ FC) vem do SGF. Sem o token, o faturado
+// ja publicado no dados.json e mantido e a coleta do RD segue normal.
+const SGF_API_URL = (process.env.SGF_API_URL || 'https://financeiro.portale60.com.br').replace(/\/+$/, '');
+const SGF_TOKEN = process.env.SGF_INTEGRACAO_TOKEN;
 
 function montarUrl(page) {
   const params = new URLSearchParams({
@@ -64,8 +64,9 @@ async function buscarPagina(page) {
   throw new Error(`Pagina ${page} falhou apos ${TENTATIVAS} tentativas: ${ultimoErro.message}`);
 }
 
-// As metas vem de uma planilha do Excel Online, que o Actions nao acessa.
-// Elas mudam raramente, entao reaproveitamos as ja publicadas no dados.json.
+// Meta Minima e Meta Desejavel vem de uma planilha do Excel Online, que o
+// Actions nao acessa. Mudam raramente, entao reaproveitamos as ja publicadas
+// no dados.json. O Faturado dessas mesmas linhas e sobrescrito pelo SGF.
 function lerMetas(path) {
   try {
     const bruto = JSON.parse(fs.readFileSync(path, 'utf8'));
@@ -78,7 +79,91 @@ function lerMetas(path) {
   return [];
 }
 
+const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+  'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+
+const semAcento = (texto) => String(texto || '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase();
+
+// Ano e mes correntes no fuso de Sao Paulo (o runner do Actions roda em UTC).
+function anoMesSaoPaulo(data = new Date()) {
+  const partes = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit' })
+    .formatToParts(data);
+  return {
+    ano: Number(partes.find((p) => p.type === 'year').value),
+    mes: Number(partes.find((p) => p.type === 'month').value),
+  };
+}
+
+async function buscarFaturadoSgf(ano, mes, { url, token, fetchImpl }) {
+  let ultimoErro;
+  for (let tentativa = 1; tentativa <= 2; tentativa += 1) {
+    try {
+      const resposta = await fetchImpl(`${url}/api/integracoes/comercial/faturamento?ano=${ano}&mes=${mes}`, {
+        headers: { Authorization: `Bearer ${token}`, 'User-Agent': 'dashboard-comercial-actions' },
+        signal: AbortSignal.timeout(20000),
+      });
+      if (!resposta.ok) throw new Error(`HTTP ${resposta.status}`);
+      const corpo = await resposta.json();
+      const valor = Number(corpo?.faturamento_corporativo);
+      if (!Number.isFinite(valor)) throw new Error('resposta sem faturamento_corporativo');
+      return valor;
+    } catch (erro) {
+      ultimoErro = erro;
+      if (tentativa < 2) await espera(3000);
+    }
+  }
+  throw ultimoErro;
+}
+
+// Sobrescreve o Faturado de cada mes do ano corrente com a soma das notas
+// ★ FC nao canceladas do SGF (mesmo numero do KPI "Corporativo (★ FC)" da tela
+// de Faturamento). Mes que falhar mantem o valor anterior: o painel nunca zera
+// por instabilidade do SGF.
+async function aplicarFaturadoSgf(metas, opcoes = {}) {
+  const { url = SGF_API_URL, token = SGF_TOKEN, fetchImpl = fetch, hoje = new Date() } = opcoes;
+  if (!token) {
+    console.warn('SGF_INTEGRACAO_TOKEN nao definido; mantendo o faturado ja publicado.');
+    return 0;
+  }
+
+  const { ano, mes: mesAtual } = anoMesSaoPaulo(hoje);
+  let atualizados = 0;
+
+  for (let mes = 1; mes <= mesAtual; mes += 1) {
+    const nomeMes = MESES[mes - 1];
+    const meta = metas.find((m) => {
+      const chave = Object.keys(m).find((k) => /^m[eê]s/i.test(k));
+      return chave && semAcento(m[chave]) === semAcento(nomeMes);
+    });
+    if (!meta) {
+      console.warn(`SGF: ${nomeMes} sem linha de metas; faturado ignorado.`);
+      continue;
+    }
+
+    try {
+      const valor = await buscarFaturadoSgf(ano, mes, { url, token, fetchImpl });
+      const chaveFaturado = Object.keys(meta).find((k) => /^faturado/i.test(k)) || 'Faturado_x003a_';
+      const novo = String(Math.round(valor * 100) / 100);
+      if (meta[chaveFaturado] !== novo) {
+        console.log(`SGF: ${nomeMes}/${ano} faturado ${meta[chaveFaturado]} -> ${novo}`);
+        meta[chaveFaturado] = novo;
+      }
+      atualizados += 1;
+    } catch (erro) {
+      console.warn(`SGF: ${nomeMes}/${ano} falhou (${erro.message}); mantendo o valor anterior.`);
+    }
+  }
+
+  console.log(`SGF: ${atualizados} de ${mesAtual} meses lidos.`);
+  return atualizados;
+}
+
 async function main() {
+  if (!TOKEN) {
+    console.error('RD_TOKEN nao definido. Cadastre o secret no repositorio.');
+    process.exit(1);
+  }
+
   const deals = [];
   const vistos = new Set();
   let total = null;
@@ -111,6 +196,7 @@ async function main() {
   if (!metas.length) {
     console.warn('Nenhuma meta reaproveitada; o dashboard ficara sem a linha de metas.');
   }
+  await aplicarFaturadoSgf(metas);
 
   const payload = {
     rd: { deals },
@@ -122,7 +208,11 @@ async function main() {
   console.log(`Gravado ${outputPath}: ${deals.length} negocios, ${metas.length} metas.`);
 }
 
-main().catch((erro) => {
-  console.error(erro.message);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((erro) => {
+    console.error(erro.message);
+    process.exit(1);
+  });
+}
+
+module.exports = { aplicarFaturadoSgf, anoMesSaoPaulo };
