@@ -1,0 +1,33 @@
+name: Sanear alerta publicado
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - alerta.json
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sanear-alerta
+  cancel-in-progress: false
+
+jobs:
+  sanitize:
+    runs-on: ubuntu-latest
+    if: github.actor != 'github-actions[bot]'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sanear alerta.json
+        run: node scripts/sanitize-alerta.js alerta.json
+      - name: Publicar se houve mudanca
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add alerta.json
+          git diff --cached --quiet && echo "alerta.json ja estava reduzido" && exit 0
+          git commit -m "Saneando alerta.json (remove contatos)"
+          for i in 1 2 3 4 5; do git push && exit 0; git pull --rebase origin main; done
+          exit 1
