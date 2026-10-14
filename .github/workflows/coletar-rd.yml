@@ -2,8 +2,10 @@ name: Coletar dados do RD
 
 on:
   schedule:
-    # A cada 30 minutos. O agendamento do GitHub pode atrasar em horario de pico.
-    - cron: '*/30 * * * *'
+    # A cada 30 minutos, das 8h as 20h (Brasilia = UTC-3). Fora disso o painel nao e usado
+    # e cada execucao consome minutos de Actions (repositorio privado).
+    - cron: '*/30 11-22 * * *'
+    - cron: '0 23 * * *'
   workflow_dispatch: {}
 
 # Evita que duas coletas escrevam o dados.json ao mesmo tempo.
@@ -21,11 +23,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Usar Node 20
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
 
       - name: Coletar negocios do RD Station e faturado do SGF
         env:
@@ -47,6 +44,18 @@ jobs:
         run: |
           git config --global user.name "github-actions"
           git config --global user.email "actions@github.com"
+          # So o updated_at de topo mudou? Nao publica (evita commit + build do Pages a toa).
+          # Heartbeat: publica mesmo assim se o ultimo commit do arquivo tiver mais de 3 horas.
+          if git show HEAD:dados.json > dados.antigo.json 2>/dev/null; then
+            IGUAL=$(node -e "const f=p=>{const d=JSON.parse(require('fs').readFileSync(p,'utf8'));delete d.updated_at;return JSON.stringify(d)};console.log(f('dados.antigo.json')===f('dados.json')?'sim':'nao')")
+            IDADE=$(( $(date +%s) - $(git log -1 --format=%ct -- dados.json) ))
+            rm -f dados.antigo.json
+            if [ "$IGUAL" = "sim" ] && [ "$IDADE" -lt 10800 ]; then
+              echo "Dados identicos (ultimo commit ha ${IDADE}s); nada a publicar."
+              git checkout -- dados.json
+              exit 0
+            fi
+          fi
           git add dados.json
           git diff --cached --quiet && echo "Sem alteracoes no dados.json" && exit 0
           git commit -m "Atualizando dados dashboard"
